@@ -1,24 +1,39 @@
-use image::RgbaImage;
 use thiserror::Error;
 
+use image::{GenericImageView, RgbaImage};
+
 pub struct Texture {
-    dimensions: (u32, u32),
-    data: Vec<[f32; 3]>,
+    dimensions : (u32, u32),
+    data : Vec<[f32; 3]>,
+}
+
+pub struct WgpuTexture {
+    pub texture : wgpu::Texture,
+    pub view : wgpu::TextureView,
+    pub sampler : wgpu::Sampler,
 }
 
 impl Texture {
-    pub fn new_from_image(path: &str) -> Result<Self, TextureError> {
+    pub fn new_from_image(path : &str) -> Result<Self, TextureError> {
+
         use std::fs::*;
         use std::io::BufReader;
 
         let file = File::open(path)?;
-        let pixels: RgbaImage =
+
+        let pixels : RgbaImage =
             image::load(BufReader::new(file), image::ImageFormat::Jpeg)?.into_rgba8();
+
         let inv_255 = 1_f32 / 255_f32;
+
         let dimensions = pixels.dimensions();
-        let data = pixels
+
+        println!("w{} h{}", dimensions.0, dimensions.1);
+
+        let data : Vec<_> = pixels
             .pixels()
             .map(|p| -> [f32; 3] {
+
                 [
                     inv_255 * (p[0] as f32),
                     inv_255 * (p[1] as f32),
@@ -27,26 +42,135 @@ impl Texture {
             })
             .collect();
 
+        println!("SliceF32Array Size: {}", data.as_slice().len());
+
         Ok(Self { dimensions, data })
     }
 
-    pub fn new_from_color(color: glm::Vec3) -> Self {
+    pub fn new_from_color(color : glm::Vec3) -> Self {
+
         let data = vec![[color.x, color.y, color.z]];
+
         let dimensions = (1_u32, 1_u32);
 
         Self { dimensions, data }
     }
 
-    pub fn as_slice(&self) -> &[[f32; 3]] {
-        self.data.as_slice()
+    pub fn as_slice(&self) -> &[[f32; 3]] { self.data.as_slice() }
+
+    pub fn as_vec_u8(&self) -> Vec<u8> {
+
+        self.data
+            .as_slice()
+            .into_iter()
+            .map(|s| -> [u8; 3] {
+
+                [
+                    (s[0] * 255_f32) as u8,
+                    (s[1] * 255_f32) as u8,
+                    (s[2] * 255_f32) as u8,
+                ]
+            })
+            .flatten()
+            .collect()
     }
 
-    pub fn dimensions(&self) -> (u32, u32) {
-        self.dimensions
+    pub fn dimensions(&self) -> (u32, u32) { self.dimensions }
+}
+
+impl WgpuTexture {
+    pub fn new_imgui_texture<'a>(
+        device : &wgpu::Device,
+        queue : &wgpu::Queue,
+        renderer : &imgui_wgpu::Renderer,
+        raw_data : &[u8],
+        size : wgpu::Extent3d,
+    ) -> imgui_wgpu::Texture {
+
+        let texture_config = imgui_wgpu::TextureConfig {
+            size,
+            label : Some("raw texture"),
+            format : Some(wgpu::TextureFormat::Rgba8Unorm),
+            ..Default::default()
+        };
+
+        let texture = imgui_wgpu::Texture::new(device, renderer, texture_config);
+
+        texture.write(&queue, &raw_data, size.width, size.height);
+
+        texture
+    }
+
+    pub fn new_wgpu_texture(
+        device : &wgpu::Device,
+        queue : &wgpu::Queue,
+        bytes : &[u8],
+        label : Option<&str>,
+    ) -> Result<Self, TextureError> {
+
+        let img = image::load_from_memory(bytes)?;
+
+        let dimensions = img.dimensions();
+
+        let rgba = img.to_rgba8();
+
+        let size = wgpu::Extent3d {
+            width : dimensions.0,
+            height : dimensions.1,
+            depth_or_array_layers : 1,
+        };
+
+        let format = wgpu::TextureFormat::Rgba8UnormSrgb;
+
+        let texture = device.create_texture(&wgpu::TextureDescriptor {
+            label,
+            size,
+            mip_level_count : 1,
+            sample_count : 1,
+            dimension : wgpu::TextureDimension::D2,
+            format,
+            usage : wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            view_formats : &[],
+        });
+
+        queue.write_texture(
+            wgpu::ImageCopyTexture {
+                aspect : wgpu::TextureAspect::All,
+                texture : &texture,
+                mip_level : 0,
+                origin : wgpu::Origin3d::ZERO,
+            },
+            &rgba,
+            wgpu::ImageDataLayout {
+                offset : 0,
+                bytes_per_row : Some(4 * dimensions.0),
+                rows_per_image : Some(dimensions.1),
+            },
+            size,
+        );
+
+        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+
+        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            address_mode_u : wgpu::AddressMode::ClampToEdge,
+            address_mode_v : wgpu::AddressMode::ClampToEdge,
+            address_mode_w : wgpu::AddressMode::ClampToEdge,
+            mag_filter : wgpu::FilterMode::Linear,
+            min_filter : wgpu::FilterMode::Nearest,
+            mipmap_filter : wgpu::FilterMode::Nearest,
+            ..Default::default()
+        });
+
+        Ok(Self {
+            texture,
+            view,
+            sampler,
+        })
     }
 }
 
 #[derive(Error, Debug)]
+
 pub enum TextureError {
     #[error(transparent)]
     FileIoError(#[from] std::io::Error),
