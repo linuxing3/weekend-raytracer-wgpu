@@ -1,7 +1,7 @@
 use imgui::TextureId;
 use thiserror::Error;
 
-use image::{GenericImageView, ImageBuffer, Rgb, RgbaImage};
+use image::{DynamicImage, GenericImageView, ImageBuffer, Rgb, RgbaImage};
 
 type XImageBuffer = ImageBuffer<Rgb<u8>, Vec<u8>>;
 
@@ -18,18 +18,38 @@ pub struct WgpuTexture {
 
 #[derive(Default)]
 
-pub struct CustomImguiTextures {
-    my_texture_id : Option<TextureId>,
+pub struct CustomImguiTextures<'a> {
+    texture_id : Option<TextureId>,
+    width : u32,
+    height : u32,
+    path : &'a str,
 }
 
-impl CustomImguiTextures {
-    pub fn register_texture_from_rgb(
+impl<'a> CustomImguiTextures<'a> {
+    pub fn new(width : u32, height : u32, path : &'a str) -> Self {
+
+        CustomImguiTextures {
+            texture_id : None,
+            width,
+            height,
+            path,
+        }
+    }
+
+    pub fn register_texture(
+        &mut self,
         device : &wgpu::Device,
         queue : &wgpu::Queue,
         renderer : &mut imgui_wgpu::Renderer,
-        bytes : &[u8],
-        dimensions : (u32, u32),
     ) -> Option<TextureId> {
+
+        let imgbuf = Texture::new_from_image_buffer(self.width, self.height, self.path).unwrap();
+
+        let dimensions = imgbuf.dimensions();
+
+        let img = DynamicImage::from(imgbuf);
+
+        let bytes : &[u8] = &img.to_rgba8();
 
         let size = wgpu::Extent3d {
             width : dimensions.0,
@@ -40,78 +60,9 @@ impl CustomImguiTextures {
         let imgui_texture : _ =
             WgpuTexture::new_imgui_texture(&device, &queue, &renderer, &bytes, size);
 
-        let texture_id = renderer.textures.insert(imgui_texture);
+        self.texture_id = Some(renderer.textures.insert(imgui_texture));
 
-        Some(texture_id)
-    }
-
-    pub fn register_texture_from_image(
-        device : &wgpu::Device,
-        queue : &wgpu::Queue,
-        renderer : &mut imgui_wgpu::Renderer,
-        bytes : &[u8],
-    ) -> Option<TextureId> {
-
-        let img = image::load_from_memory(bytes).unwrap();
-
-        let dimensions = img.dimensions();
-
-        let raw_data = img.to_rgba8();
-
-        let size = wgpu::Extent3d {
-            width : dimensions.0,
-            height : dimensions.1,
-            depth_or_array_layers : 1,
-        };
-
-        let imgui_texture : _ =
-            WgpuTexture::new_imgui_texture(&device, &queue, &renderer, &raw_data, size);
-
-        let texture_id = renderer.textures.insert(imgui_texture);
-
-        Some(texture_id)
-    }
-
-    pub fn register_texture(
-        device : &wgpu::Device,
-        queue : &wgpu::Queue,
-        renderer : &mut imgui_wgpu::Renderer,
-        width : u32,
-        height : u32,
-        path : &str,
-    ) -> Option<TextureId> {
-
-        let mut imgbuf = Texture::new_from_image_buffer(width, height, path).unwrap();
-
-        let dimensions = imgbuf.dimensions();
-
-        let mut raw_data : Vec<u8> = Vec::new();
-
-        // Iterate over the coordinates and pixels of the image
-        for (x, y, pixel) in imgbuf.enumerate_pixels_mut() {
-
-            let image::Rgb(data) = *pixel;
-
-            for i in 0..3 {
-
-                raw_data.push(data[i]);
-
-                raw_data.push(1);
-            }
-        }
-
-        let size = wgpu::Extent3d {
-            width : dimensions.0,
-            height : dimensions.1,
-            depth_or_array_layers : 1,
-        };
-
-        let imgui_texture : _ =
-            WgpuTexture::new_imgui_texture(&device, &queue, &renderer, &raw_data, size);
-
-        let texture_id = renderer.textures.insert(imgui_texture);
-
-        Some(texture_id)
+        self.texture_id
     }
 
     pub fn update_texture(

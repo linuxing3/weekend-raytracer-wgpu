@@ -115,39 +115,11 @@ fn main() {
 
     let path = "assets/fractal.jpeg";
 
-    let texture_id = match Texture::new_from_image_buffer(600, 400, path) {
-        Ok(imgbuf) => {
+    let mut imgui_texture = CustomImguiTextures::new(600, 400, path);
 
-            let img = DynamicImage::from(imgbuf);
-
-            let bytes : &[u8] = &img.to_rgba8();
-
-            println!("Got image buffer");
-
-            CustomImguiTextures::register_texture_from_rgb(
-                &context.device,
-                &context.queue,
-                &mut imgui_renderer,
-                bytes,
-                img.dimensions(),
-            )
-            .unwrap()
-        }
-        _ => {
-
-            println!("No image buffer, register from scratch");
-
-            CustomImguiTextures::register_texture(
-                &context.device,
-                &context.queue,
-                &mut imgui_renderer,
-                600,
-                400,
-                path,
-            )
-            .unwrap()
-        }
-    };
+    let texture_id = imgui_texture
+        .register_texture(&context.device, &context.queue, &mut imgui_renderer)
+        .unwrap();
 
     let mut last_cursor = None;
 
