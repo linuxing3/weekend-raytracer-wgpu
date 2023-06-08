@@ -9,8 +9,8 @@ pub extern crate nalgebra_glm as glm;
 
 use fly_camera::FlyCameraController;
 use raytracer::{
-    Material, Raytracer, RenderParams, SamplingParams, Scene, SkyParams, Sphere, Texture,
-    WgpuTexture,
+    CustomImguiTextures, Material, Raytracer, RenderParams, SamplingParams, Scene, SkyParams,
+    Sphere, Texture, WgpuTexture,
 };
 use std::{collections::VecDeque, time::Instant};
 use winit::{
@@ -19,7 +19,7 @@ use winit::{
     window::{Window, WindowBuilder},
 };
 
-use image::GenericImageView;
+use image::{DynamicImage, GenericImageView};
 
 mod fly_camera;
 mod raytracer;
@@ -113,29 +113,41 @@ fn main() {
         imgui_renderer_config,
     );
 
-    let bytes = include_bytes!("../assets/moon.jpeg");
+    let path = "assets/fractal.jpeg";
 
-    let img = image::load_from_memory(bytes).unwrap();
+    let texture_id = match Texture::new_from_image_buffer(600, 400, path) {
+        Ok(imgbuf) => {
 
-    let dimensions = img.dimensions();
+            let img = DynamicImage::from(imgbuf);
 
-    let rgba = img.to_rgba8();
+            let bytes : &[u8] = &img.to_rgba8();
 
-    let size = wgpu::Extent3d {
-        width : dimensions.0,
-        height : dimensions.1,
-        depth_or_array_layers : 1,
+            println!("Got image buffer");
+
+            CustomImguiTextures::register_texture_from_rgb(
+                &context.device,
+                &context.queue,
+                &mut imgui_renderer,
+                bytes,
+                img.dimensions(),
+            )
+            .unwrap()
+        }
+        _ => {
+
+            println!("No image buffer, register from scratch");
+
+            CustomImguiTextures::register_texture(
+                &context.device,
+                &context.queue,
+                &mut imgui_renderer,
+                600,
+                400,
+                path,
+            )
+            .unwrap()
+        }
     };
-
-    let imgui_texture = WgpuTexture::new_imgui_texture(
-        &context.device,
-        &context.queue,
-        &imgui_renderer,
-        &rgba,
-        size,
-    );
-
-    let texture_id = imgui_renderer.textures.insert(imgui_texture);
 
     let mut last_cursor = None;
 
@@ -455,7 +467,7 @@ fn main() {
     });
 }
 
-struct GpuContext {
+pub struct GpuContext {
     device : wgpu::Device,
     queue : wgpu::Queue,
     surface : wgpu::Surface,

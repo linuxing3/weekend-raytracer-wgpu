@@ -1,6 +1,7 @@
+use imgui::TextureId;
 use thiserror::Error;
 
-use image::{GenericImageView, RgbaImage};
+use image::{GenericImageView, ImageBuffer, Rgb, RgbaImage};
 
 pub struct Texture {
     dimensions : (u32, u32),
@@ -13,7 +14,230 @@ pub struct WgpuTexture {
     pub sampler : wgpu::Sampler,
 }
 
+#[derive(Default)]
+
+pub struct CustomImguiTextures {
+    my_texture_id : Option<TextureId>,
+}
+
+impl CustomImguiTextures {
+    pub fn register_texture_from_rgb(
+        device : &wgpu::Device,
+        queue : &wgpu::Queue,
+        renderer : &mut imgui_wgpu::Renderer,
+        bytes : &[u8],
+        dimensions : (u32, u32),
+    ) -> Option<TextureId> {
+
+        let size = wgpu::Extent3d {
+            width : dimensions.0,
+            height : dimensions.1,
+            depth_or_array_layers : 1,
+        };
+
+        let imgui_texture : _ =
+            WgpuTexture::new_imgui_texture(&device, &queue, &renderer, &bytes, size);
+
+        let texture_id = renderer.textures.insert(imgui_texture);
+
+        Some(texture_id)
+    }
+
+    pub fn register_texture_from_image(
+        device : &wgpu::Device,
+        queue : &wgpu::Queue,
+        renderer : &mut imgui_wgpu::Renderer,
+        bytes : &[u8],
+    ) -> Option<TextureId> {
+
+        let img = image::load_from_memory(bytes).unwrap();
+
+        let dimensions = img.dimensions();
+
+        let raw_data = img.to_rgba8();
+
+        let size = wgpu::Extent3d {
+            width : dimensions.0,
+            height : dimensions.1,
+            depth_or_array_layers : 1,
+        };
+
+        let imgui_texture : _ =
+            WgpuTexture::new_imgui_texture(&device, &queue, &renderer, &raw_data, size);
+
+        let texture_id = renderer.textures.insert(imgui_texture);
+
+        Some(texture_id)
+    }
+
+    pub fn register_texture(
+        device : &wgpu::Device,
+        queue : &wgpu::Queue,
+        renderer : &mut imgui_wgpu::Renderer,
+        width : u32,
+        height : u32,
+        path : &str,
+    ) -> Option<TextureId> {
+
+        let mut imgbuf = Texture::new_from_image_buffer(width, height, path).unwrap();
+
+        let dimensions = imgbuf.dimensions();
+
+        let mut raw_data : Vec<u8> = Vec::new();
+
+        // Iterate over the coordinates and pixels of the image
+        for (x, y, pixel) in imgbuf.enumerate_pixels_mut() {
+
+            let image::Rgb(data) = *pixel;
+
+            for i in 0..3 {
+
+                raw_data.push(data[i]);
+
+                raw_data.push(1);
+            }
+        }
+
+        let size = wgpu::Extent3d {
+            width : dimensions.0,
+            height : dimensions.1,
+            depth_or_array_layers : 1,
+        };
+
+        let imgui_texture : _ =
+            WgpuTexture::new_imgui_texture(&device, &queue, &renderer, &raw_data, size);
+
+        let texture_id = renderer.textures.insert(imgui_texture);
+
+        Some(texture_id)
+    }
+
+    pub fn update_texture(
+        device : &wgpu::Device,
+        queue : &wgpu::Queue,
+        renderer : &mut imgui_wgpu::Renderer,
+        width : u32,
+        height : u32,
+        texture_id : TextureId,
+        path : &str,
+    ) -> Option<TextureId> {
+
+        let mut imgbuf = Texture::new_from_image_buffer(width, height, path).unwrap();
+
+        let dimensions = imgbuf.dimensions();
+
+        let mut raw_data : Vec<u8> = Vec::new();
+
+        // Iterate over the coordinates and pixels of the image
+        for (x, y, pixel) in imgbuf.enumerate_pixels_mut() {
+
+            let image::Rgb(data) = *pixel;
+
+            for i in 0..3 {
+
+                raw_data.push(data[i]);
+
+                raw_data.push(1);
+            }
+        }
+
+        let size = wgpu::Extent3d {
+            width : dimensions.0,
+            height : dimensions.1,
+            depth_or_array_layers : 1,
+        };
+
+        let imgui_texture : _ =
+            WgpuTexture::new_imgui_texture(&device, &queue, &renderer, &raw_data, size);
+
+        match renderer.textures.replace(texture_id, imgui_texture) {
+            Some(t) => Some(texture_id),
+            _ => None,
+        }
+    }
+}
+
 impl Texture {
+    pub fn per_pixel(x : u32, y : u32) -> Rgb<u8> {
+
+        let r = (1.0 * x as f32) as u8;
+
+        let b = (1.0 * y as f32) as u8;
+
+        Rgb([r, 0, b])
+    }
+
+    pub fn set_all_pixels(
+        width : u32,
+        height : u32,
+        scalex : f32,
+        scaley : f32,
+        imgbuf : &mut ImageBuffer<Rgb<u8>, Vec<u8>>,
+    ) {
+
+        // A redundant loop to demonstrate reading image data
+        for y in 0..height {
+
+            for x in 0..width {
+
+                let pixel = imgbuf.get_pixel_mut(x, y);
+
+                *pixel = Texture::per_pixel_diamond(x, y, scalex, scaley);
+            }
+        }
+    }
+
+    pub fn per_pixel_diamond(x : u32, y : u32, scalex : f32, scaley : f32) -> Rgb<u8> {
+
+        let cx = y as f32 * scalex - 1.5;
+
+        let cy = x as f32 * scaley - 1.5;
+
+        let c = num::complex::Complex::new(-0.4, 0.6);
+
+        let mut z = num::complex::Complex::new(cx, cy);
+
+        let mut i = 0;
+
+        while i < 255 && z.norm() <= 2.0 {
+
+            z = z * z + c;
+
+            i += 1;
+        }
+
+        image::Rgb([i as u8, i as u8, i as u8])
+    }
+
+    pub fn new_from_image_buffer(
+        width : u32,
+        height : u32,
+        _path : &str,
+    ) -> Result<ImageBuffer<image::Rgb<u8>, Vec<u8>>, TextureError> {
+
+        // Create a new ImgBuf with width: imgx and height: imgy
+        let mut imgbuf = ImageBuffer::new(width, height);
+
+        // Iterate over the coordinates and pixels of the image
+        for (x, y, per_pixel) in imgbuf.enumerate_pixels_mut() {
+
+            *per_pixel = Texture::per_pixel(x, y);
+        }
+
+        let scalex = 3.0 / width as f32;
+
+        let scaley = 3.0 / height as f32;
+
+        // Iterate over the coordinates and set pixels
+        Texture::set_all_pixels(width, height, scalex, scaley, &mut imgbuf);
+
+        //
+        // Save the image as “fractal.png”, the format is deduced from the path
+        // imgbuf.save(path).unwrap();
+
+        Ok(imgbuf)
+    }
+
     pub fn new_from_image(path : &str) -> Result<Self, TextureError> {
 
         use std::fs::*;
