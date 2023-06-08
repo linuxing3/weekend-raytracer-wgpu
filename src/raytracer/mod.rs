@@ -1,4 +1,5 @@
 use gpu_buffer::{StorageBuffer, UniformBuffer};
+use nalgebra_glm::{acos, atan2, dot, Vec3};
 use wgpu::util::DeviceExt;
 pub use {angle::Angle, texture::CustomImguiTextures, texture::Texture, texture::WgpuTexture};
 
@@ -906,3 +907,85 @@ const VERTICES: &[Vertex] = &[
         tex_coords: [1.0, 0.0],
     },
 ];
+
+pub struct Ray {
+    origin: Vec3,
+    direction: Vec3,
+}
+
+pub struct Scatter {
+    ray: Ray,
+    albedo: Vec3,
+}
+
+pub struct Intersection {
+    p: Vec3,
+    n: Vec3,
+    u: f32,
+    v: f32,
+    t: f32,
+}
+
+pub fn ray_intersect_sphere(
+    ray: &mut Ray,
+    sphere: Sphere,
+    tmin: f32,
+    tmax: f32,
+) -> bool {
+    let oc = ray.origin - sphere.center.xyz();
+
+    let a = dot(&ray.direction, &ray.direction);
+
+    let b = dot(&oc, &ray.direction);
+
+    let c = dot(&oc, &oc) - sphere.radius * sphere.radius;
+
+    let discriminant = b * b - 4.0 * a * c;
+
+    if discriminant > 0.0 {
+        let mut t = (-b - num::Float::sqrt(discriminant)) / a;
+
+        if t < tmax && t > tmin {
+            // *hit = sphereIntersection(ray, sphere, t);
+
+            return true;
+        }
+
+        t = (-b + num::Float::sqrt(discriminant)) / a;
+
+        if t < tmax && t > tmin {
+            // *hit = sphereIntersection(ray, sphere, t);
+
+            return true;
+        }
+    }
+
+    return false;
+}
+
+pub fn sphere_intersection(
+    ray: Ray,
+    sphere: Sphere,
+    t: f32,
+) -> Intersection {
+    let p = ray_point_at_parameter(ray, t);
+
+    let n = (1.0 / sphere.radius) * (p - sphere.center.xyz());
+
+    let theta = acos(&-n.yy()).len() as f32;
+
+    let phi = atan2(&-n.zz(), &n.xx()).len() as f32 + PI;
+
+    let u = 0.5 * FRAC_1_PI * phi;
+
+    let v = FRAC_1_PI * theta;
+
+    return Intersection { p, n, u, v, t };
+}
+
+pub fn ray_point_at_parameter(
+    ray: Ray,
+    t: f32,
+) -> Vec3 {
+    return ray.origin + t * ray.direction;
+}
