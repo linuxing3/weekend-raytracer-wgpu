@@ -3,6 +3,8 @@ use thiserror::Error;
 
 use image::{GenericImageView, ImageBuffer, Rgb, RgbaImage};
 
+type XImageBuffer = ImageBuffer<Rgb<u8>, Vec<u8>>;
+
 pub struct Texture {
     dimensions : (u32, u32),
     data : Vec<[f32; 3]>,
@@ -158,21 +160,30 @@ impl CustomImguiTextures {
 }
 
 impl Texture {
-    pub fn per_pixel(x : u32, y : u32) -> Rgb<u8> {
+    pub fn per_pixel(x : u32, y : u32, factorx : f32, factory : f32) -> Rgb<u8> {
 
-        let r = (1.0 * x as f32) as u8;
+        let r = (factorx * x as f32) as u8;
 
-        let b = (1.0 * y as f32) as u8;
+        let b = (factory * y as f32) as u8;
 
-        Rgb([r, 0, b])
+        Rgb([r, b, b])
     }
 
-    pub fn set_all_pixels(
+    pub fn set_default_color(imgbuf : &mut XImageBuffer, color : Rgb<u8>) {
+
+        // Iterate over the coordinates and pixels of the image
+        for (x, y, per_pixel) in imgbuf.enumerate_pixels_mut() {
+
+            *per_pixel = color;
+        }
+    }
+
+    pub fn set_pixels_raytracing(
         width : u32,
         height : u32,
         scalex : f32,
         scaley : f32,
-        imgbuf : &mut ImageBuffer<Rgb<u8>, Vec<u8>>,
+        imgbuf : &mut XImageBuffer,
     ) {
 
         // A redundant loop to demonstrate reading image data
@@ -182,12 +193,18 @@ impl Texture {
 
                 let pixel = imgbuf.get_pixel_mut(x, y);
 
-                *pixel = Texture::per_pixel_diamond(x, y, scalex, scaley);
+                if x < width / 2 {
+
+                    *pixel = Texture::per_pixel(x, y, scalex, scaley);
+                } else {
+
+                    *pixel = Texture::per_pixel(x, y, 0.3, 0.6);
+                }
             }
         }
     }
 
-    pub fn per_pixel_diamond(x : u32, y : u32, scalex : f32, scaley : f32) -> Rgb<u8> {
+    pub fn set_pixel_art(x : u32, y : u32, scalex : f32, scaley : f32) -> Rgb<u8> {
 
         let cx = y as f32 * scalex - 1.5;
 
@@ -213,25 +230,18 @@ impl Texture {
         width : u32,
         height : u32,
         _path : &str,
-    ) -> Result<ImageBuffer<image::Rgb<u8>, Vec<u8>>, TextureError> {
+    ) -> Result<XImageBuffer, TextureError> {
 
         // Create a new ImgBuf with width: imgx and height: imgy
         let mut imgbuf = ImageBuffer::new(width, height);
 
-        // Iterate over the coordinates and pixels of the image
-        for (x, y, per_pixel) in imgbuf.enumerate_pixels_mut() {
-
-            *per_pixel = Texture::per_pixel(x, y);
-        }
-
-        let scalex = 3.0 / width as f32;
-
-        let scaley = 3.0 / height as f32;
-
         // Iterate over the coordinates and set pixels
-        Texture::set_all_pixels(width, height, scalex, scaley, &mut imgbuf);
-
+        // let scalex = 3.0 / width as f32;
+        // let scaley = 3.0 / height as f32;
+        // Texture::set_all_pixels(width, height, scalex, scaley, &mut imgbuf);
         //
+        Texture::set_default_color(&mut imgbuf, Rgb([122, 133, 123]));
+
         // Save the image as “fractal.png”, the format is deduced from the path
         // imgbuf.save(path).unwrap();
 
