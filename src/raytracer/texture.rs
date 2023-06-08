@@ -166,7 +166,7 @@ impl Texture {
 
         let b = (factory * y as f32) as u8;
 
-        Rgb([r, b, b])
+        Rgb([r, 0, b])
     }
 
     pub fn set_default_color(imgbuf : &mut XImageBuffer, color : Rgb<u8>) {
@@ -240,7 +240,7 @@ impl Texture {
         // let scaley = 3.0 / height as f32;
         // Texture::set_all_pixels(width, height, scalex, scaley, &mut imgbuf);
         //
-        Texture::set_default_color(&mut imgbuf, Rgb([122, 133, 123]));
+        Texture::set_default_color(&mut imgbuf, Texture::per_pixel(100, 100, 0.3, 0.6));
 
         // Save the image as “fractal.png”, the format is deduced from the path
         // imgbuf.save(path).unwrap();
