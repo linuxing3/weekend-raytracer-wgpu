@@ -142,20 +142,7 @@ impl Texture {
         }
     }
 
-    pub fn per_pixel(
-        x: u32,
-        y: u32,
-        factorx: f32,
-        factory: f32,
-    ) -> Rgb<u8> {
-        let r = (factorx * x as f32) as u8;
-
-        let b = (factory * y as f32) as u8;
-
-        Rgb([r, 0, b])
-    }
-
-    pub fn set_default_color(
+    pub fn set_pixel_with_uniform_color(
         imgbuf: &mut XImageBuffer,
         color: Rgb<u8>,
     ) {
@@ -165,7 +152,7 @@ impl Texture {
         }
     }
 
-    pub fn set_pixels_raytracing(
+    pub fn set_pixels_with_raytracing(
         width: u32,
         height: u32,
         imgbuf: &mut XImageBuffer,
@@ -183,7 +170,7 @@ impl Texture {
         }
     }
 
-    pub fn set_pixel_art(
+    pub fn set_pixel_with_art_style(
         x: u32,
         y: u32,
         scalex: f32,
@@ -216,7 +203,7 @@ impl Texture {
         // Create a new ImgBuf with width: imgx and height: imgy
         let mut imgbuf = ImageBuffer::new(width, height);
 
-        Texture::set_pixels_raytracing(width, height, &mut imgbuf);
+        Texture::set_pixels_with_raytracing(width, height, &mut imgbuf);
 
         // Save the image as “fractal.png”, the format is deduced from the path
         // imgbuf.save(path).unwrap();
