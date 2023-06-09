@@ -178,7 +178,7 @@ impl<'a> Layer<'a> {
 
         let direction = orientation.forward - origin;
 
-        let mut ray = Ray { origin, direction };
+        let ray = Ray { origin, direction };
 
         let radius = 0.5_f32;
 
@@ -201,41 +201,22 @@ impl<'a> Layer<'a> {
 
     pub fn per_pixel(x : f32, y : f32) -> Rgb<u8> {
 
+        let ray = Ray::new2(x, y);
+
         let radius = 0.5_f32;
 
-        let sphere = Sphere::new(glm::vec3(0.5, 0.5, 0.0), radius, 3_u32);
+        let t = Self::ray_intersect_circle(ray, radius);
 
-        let origin = glm::vec3(1.5, 1.5, -4.0);
+        // println!(" Coords: [{}, {}] ", x, y);
+        // println!(" Color:  [{}, {}, {} -> {}] ", a, b, c, discriminant);
+        let hit_color = Rgb([125.0 as u8, 128.0 as u8, 128.0 as u8]);
 
-        let direction = glm::vec3(x, y, -1.0);
+        let background_color = Rgb([(x * 255.0) as u8, (y * 255.0) as u8, 55.0 as u8]);
 
-        let mut ray = Ray { origin, direction };
-
-        let t = Self::ray_intersect_sphere(&mut ray, sphere);
-
-        if t > 0.0 {
-
-            return Rgb([125.0 as u8, 128.0 as u8, 18.0 as u8]);
+        match t >= 0.0 {
+            true => hit_color,
+            false => background_color,
         }
-
-        Rgb([(x * 255.0) as u8, (y * 255.0) as u8, 55.0 as u8])
-
-        //
-        // let a = dot(&ray.direction, &ray.direction);
-        //
-        // let b = 2.0 * dot(&ray.origin, &ray.direction);
-        //
-        // let c = dot(&ray.origin, &ray.origin) - radius * radius;
-        //
-        // let discriminant = b * b - 4.0 * a * c;
-        //
-        // // println!(" Coords: [{}, {}] ", x, y);
-        // // println!(" Color:  [{}, {}, {} -> {}] ", a, b, c, discriminant);
-        //
-        // match discriminant >= 0.0 {
-        //     true => Rgb([125.0 as u8, 128.0 as u8, 18.0 as u8]),
-        //     false => Rgb([(x * 255.0) as u8, (y * 255.0) as u8, 55.0 as u8]),
-        // }
     }
 
     pub fn set_pixel_with_art_style(x : u32, y : u32, scalex : f32, scaley : f32) -> Rgb<u8> {
@@ -275,7 +256,26 @@ impl<'a> Layer<'a> {
         Ok(imgbuf)
     }
 
-    pub fn ray_intersect_sphere(ray : &mut Ray, sphere : Sphere) -> f32 {
+    pub fn ray_intersect_circle(ray : Ray, radius : f32) -> f32 {
+
+        let a = dot(&ray.direction, &ray.direction);
+
+        let b = 2.0 * dot(&ray.origin, &ray.direction);
+
+        let c = dot(&ray.origin, &ray.origin) - radius * radius;
+
+        let discriminant = b * b - 4.0 * a * c;
+
+        discriminant
+    }
+
+    pub fn ray_intersect_sphere(
+        ray : &mut Ray,
+        sphere : Sphere,
+        tmin : f32,
+        tmax : f32,
+        hit : Intersection,
+    ) -> bool {
 
         let oc = ray.origin - sphere.center.xyz();
 
@@ -287,12 +287,28 @@ impl<'a> Layer<'a> {
 
         let discriminant = b * b - 4.0 * a * c;
 
-        if discriminant < 0.0 {
+        if discriminant > 0.0 {
 
-            return -1.0;
+            let mut t = (-b - num::Float::sqrt(discriminant)) / a;
+
+            if t < tmax && t > tmin {
+
+                // *hit = Self::sphere_intersection(*ray, sphere, t);
+
+                return true;
+            }
+
+            t = (-b + num::Float::sqrt(discriminant)) / a;
+
+            if t < tmax && t > tmin {
+
+                // *hit = sphere_intersection(*ray, sphere, t);
+
+                return true;
+            }
         }
 
-        (-b - num::Float::sqrt(discriminant)) / (2.0 * a)
+        return false;
     }
 
     pub fn sphere_intersection(ray : Ray, sphere : Sphere, t : f32) -> Intersection {
