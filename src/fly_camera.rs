@@ -230,13 +230,13 @@ fn generate_camera_ray_dir(
     glm::normalize(&(point_on_plane - camera.position))
 }
 
-struct Orientation {
-    forward : glm::Vec3,
-    right : glm::Vec3,
-    up : glm::Vec3,
+pub struct Orientation {
+    pub forward : glm::Vec3,
+    pub right : glm::Vec3,
+    pub up : glm::Vec3,
 }
 
-fn camera_orientation(camera : &FlyCameraController) -> Orientation {
+pub fn camera_orientation(camera : &FlyCameraController) -> Orientation {
 
     let forward = glm::normalize(&glm::vec3(
         camera.yaw.as_radians().cos() * camera.pitch.as_radians().cos(),

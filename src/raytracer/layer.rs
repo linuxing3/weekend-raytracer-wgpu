@@ -1,6 +1,6 @@
 use std::ptr::null_mut;
 
-use crate::fly_camera::FlyCameraController;
+use crate::fly_camera::{camera_orientation, FlyCameraController};
 
 use super::{texture::*, Ray, RenderParams};
 use image::{DynamicImage, ImageBuffer, Rgb};
@@ -150,11 +150,31 @@ impl<'a> Layer<'a> {
 
         let mut new_imgui_region_size = None;
 
+        let orientation = camera_orientation(&self.camera_controller);
+
+        let origin = self.camera_controller.position;
+
+        let direction = orientation.forward - origin;
+
+        let ray = Ray { origin, direction };
+
         window
             .size(self.size, imgui::Condition::FirstUseEver)
             .build(|| {
 
                 new_imgui_region_size = Some(ui.content_region_avail());
+
+                ui.text(format!("ray origin x: {}", ray.origin.x));
+
+                ui.text(format!("ray origin y: {}", ray.origin.y));
+
+                ui.text(format!("ray origin z: {}", ray.origin.z));
+
+                ui.text(format!("ray direction x: {}", direction.x));
+
+                ui.text(format!("ray direction y: {}", direction.y));
+
+                ui.text(format!("ray direction z: {}", direction.z));
 
                 imgui::Image::new(self.texture_id, new_imgui_region_size.unwrap()).build(ui);
             });
@@ -193,10 +213,13 @@ impl<'a> Layer<'a> {
 
     pub fn update_pixel(&mut self, x : f32, y : f32) -> Rgb<u8> {
 
-        let ray = Ray {
-            origin : self.camera_controller.position,
-            direction : glm::vec3(x, y, -1.0),
-        };
+        let orientation = camera_orientation(&self.camera_controller);
+
+        let origin = self.camera_controller.position;
+
+        let direction = orientation.forward - origin;
+
+        let ray = Ray { origin, direction };
 
         let radius = 0.5_f32;
 
