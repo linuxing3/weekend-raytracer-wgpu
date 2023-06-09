@@ -1,12 +1,16 @@
 use gpu_buffer::{StorageBuffer, UniformBuffer};
 use nalgebra_glm::{acos, atan2, dot, Vec3};
 use wgpu::util::DeviceExt;
-pub use {angle::Angle, texture::CustomImguiTextures, texture::Texture, texture::WgpuTexture};
+pub use {
+    angle::Angle, layer::Layer, texture::CustomImguiTextures, texture::Texture,
+    texture::WgpuTexture,
+};
 
 use thiserror::Error;
 
 mod angle;
 mod gpu_buffer;
+mod layer;
 mod texture;
 
 use std::f32::consts::*;

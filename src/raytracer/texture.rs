@@ -6,7 +6,7 @@ use image::{DynamicImage, GenericImageView, ImageBuffer, Rgb, RgbaImage};
 
 use super::{ray_intersect_sphere, Ray, Sphere};
 
-type XImageBuffer = ImageBuffer<Rgb<u8>, Vec<u8>>;
+pub type XImageBuffer = ImageBuffer<Rgb<u8>, Vec<u8>>;
 
 pub struct Texture {
     dimensions: (u32, u32),
