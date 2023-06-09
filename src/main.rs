@@ -393,6 +393,8 @@ fn main() {
 
                 render_params.camera = fly_camera_controller.renderer_camera();
 
+                render_params.camera = layer.camera_controller.renderer_camera();
+
                 match raytracer.set_render_params(&context.queue, &render_params) {
                     Err(e) => {
 

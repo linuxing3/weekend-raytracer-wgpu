@@ -2,7 +2,7 @@ use std::ptr::null_mut;
 
 use crate::fly_camera::{camera_orientation, FlyCameraController};
 
-use super::{texture::*, Ray, RenderParams};
+use super::{texture::*, Ray};
 use image::{DynamicImage, ImageBuffer, Rgb};
 use imgui::TextureId;
 use nalgebra_glm::dot;
@@ -51,50 +51,6 @@ impl<'a> Layer<'a> {
             file_path,
             imgbuf,
             camera_controller,
-        }
-    }
-
-    pub fn update(&mut self, camera : &FlyCameraController) {
-
-        unsafe {
-
-            let mut imgbuf = Box::from_raw(self.imgbuf);
-
-            let [width, height] = self.size;
-
-            // A redundant loop to demonstrate reading image data
-            for j in 0..height as u32 {
-
-                for i in 0..width as u32 {
-
-                    let pixel = imgbuf.get_pixel_mut(i, j);
-
-                    let x = i as f32 / width;
-
-                    let y = j as f32 / height;
-
-                    let origin = camera.position;
-
-                    let direction = glm::vec3(x as f32, x as f32, -1.0);
-
-                    let ray = Ray { origin, direction };
-
-                    let radius = 0.5_f32;
-
-                    let a = dot(&ray.direction, &ray.direction);
-
-                    let b = 2.0 * dot(&ray.origin, &ray.direction);
-
-                    let c = dot(&ray.origin, &ray.origin) - radius * radius;
-
-                    let discriminant = b * b - 4.0 * a * c;
-
-                    *pixel = match discriminant >= 0.0 {
-                        true => Rgb([125.0 as u8, 18.0 as u8, 18.0 as u8]),
-                        false => Rgb([(x * 255.0) as u8, (y * 255.0) as u8, 55.0 as u8]),
-                    };
-                }
-            }
         }
     }
 
@@ -262,7 +218,7 @@ impl<'a> Layer<'a> {
         // println!(" Color:  [{}, {}, {} -> {}] ", a, b, c, discriminant);
 
         match discriminant >= 0.0 {
-            true => Rgb([125.0 as u8, 18.0 as u8, 18.0 as u8]),
+            true => Rgb([125.0 as u8, 128.0 as u8, 18.0 as u8]),
             false => Rgb([(x * 255.0) as u8, (y * 255.0) as u8, 55.0 as u8]),
         }
     }
