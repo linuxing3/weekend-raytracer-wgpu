@@ -137,8 +137,8 @@ impl Texture {
         // println!(" Color:  [{}, {}, {} -> {}] ", a, b, c, discriminant);
 
         match discriminant >= 0.0 {
-            true => Rgb([255.0 as u8, 18.0 as u8, 18.0 as u8]),
-            false => Rgb([10.0 as u8, 25.0 as u8, 255.0 as u8]),
+            true => Rgb([125.0 as u8, 18.0 as u8, 18.0 as u8]),
+            false => Rgb([(x * 255.0) as u8, (y * 255.0) as u8, 55.0 as u8]),
         }
     }
 

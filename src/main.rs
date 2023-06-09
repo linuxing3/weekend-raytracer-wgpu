@@ -12,7 +12,7 @@ use raytracer::{
     CustomImguiTextures, Layer, Material, Raytracer, RenderParams, SamplingParams, Scene,
     SkyParams, Sphere, Texture,
 };
-use std::{collections::VecDeque, time::Instant};
+use std::{borrow::BorrowMut, collections::VecDeque, time::Instant};
 use winit::{
     event::{Event, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
@@ -110,17 +110,11 @@ fn main() {
         imgui_renderer_config,
     );
 
+    // HACK: imgui layers
     let path = "assets/fractal.jpeg";
 
     let mut layer = Layer::new([600.0, 400.0], "Tracer", path, render_params);
-
     layer.register_texture(&context.device, &context.queue, &mut imgui_renderer);
-
-    // let mut imgui_texture = CustomImguiTextures::new(600, 400, path);
-
-    // let texture_id = imgui_texture
-    //     .register_texture(&context.device, &context.queue, &mut imgui_renderer)
-    //     .unwrap();
 
     let mut last_cursor = None;
 
@@ -196,8 +190,11 @@ fn main() {
 
                     let ui = imgui.frame();
 
+                    // HACK:
                     {
+                        // for _layer in &mut layer_stack {
                         layer.render(ui);
+                        // }
                     }
 
                     {

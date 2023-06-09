@@ -1,7 +1,7 @@
 use crate::fly_camera::FlyCameraController;
 
 use super::{texture::*, RenderParams};
-use image::DynamicImage;
+use image::{DynamicImage, Rgb};
 use imgui::TextureId;
 
 pub struct Layer<'a> {
@@ -69,6 +69,12 @@ impl<'a> Layer<'a> {
         &self.texture_id
     }
 
+    pub fn img_buf(&mut self) -> XImageBuffer {
+        let imgbuf_boxed = unsafe { Box::from_raw(self.imgbuf) };
+        let mut imgbuf = *imgbuf_boxed;
+        imgbuf
+    }
+
     pub fn render(
         &mut self,
         ui: &mut imgui::Ui,
@@ -91,6 +97,8 @@ impl<'a> Layer<'a> {
         &mut self,
         ui: &mut imgui::Ui,
         size: [f32; 2],
+        params: &RenderParams,
+        camera: &FlyCameraController,
     ) {
         if self.size != size {
             self.size = size;
