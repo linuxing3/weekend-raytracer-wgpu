@@ -1,11 +1,14 @@
-use std::ptr::null_mut;
+use std::{
+    f32::consts::{FRAC_1_PI, PI},
+    ptr::null_mut,
+};
 
 use crate::fly_camera::{camera_orientation, FlyCameraController};
 
-use super::{texture::*, Ray};
+use super::{texture::*, Intersection, Ray, Sphere};
 use image::{DynamicImage, ImageBuffer, Rgb};
 use imgui::TextureId;
-use nalgebra_glm::dot;
+use nalgebra_glm::{acos, atan2, dot, Vec3};
 
 pub struct Layer<'a> {
     texture_id : imgui::TextureId,
@@ -175,7 +178,7 @@ impl<'a> Layer<'a> {
 
         let direction = orientation.forward - origin;
 
-        let ray = Ray { origin, direction };
+        let mut ray = Ray { origin, direction };
 
         let radius = 0.5_f32;
 
@@ -198,29 +201,41 @@ impl<'a> Layer<'a> {
 
     pub fn per_pixel(x : f32, y : f32) -> Rgb<u8> {
 
+        let radius = 0.5_f32;
+
+        let sphere = Sphere::new(glm::vec3(0.5, 0.5, 0.0), radius, 3_u32);
+
         let origin = glm::vec3(1.5, 1.5, -4.0);
 
         let direction = glm::vec3(x, y, -1.0);
 
-        let ray = Ray { origin, direction };
+        let mut ray = Ray { origin, direction };
 
-        let radius = 0.5_f32;
+        let t = Self::ray_intersect_sphere(&mut ray, sphere);
 
-        let a = dot(&ray.direction, &ray.direction);
+        if t > 0.0 {
 
-        let b = 2.0 * dot(&ray.origin, &ray.direction);
-
-        let c = dot(&ray.origin, &ray.origin) - radius * radius;
-
-        let discriminant = b * b - 4.0 * a * c;
-
-        // println!(" Coords: [{}, {}] ", x, y);
-        // println!(" Color:  [{}, {}, {} -> {}] ", a, b, c, discriminant);
-
-        match discriminant >= 0.0 {
-            true => Rgb([125.0 as u8, 128.0 as u8, 18.0 as u8]),
-            false => Rgb([(x * 255.0) as u8, (y * 255.0) as u8, 55.0 as u8]),
+            return Rgb([125.0 as u8, 128.0 as u8, 18.0 as u8]);
         }
+
+        Rgb([(x * 255.0) as u8, (y * 255.0) as u8, 55.0 as u8])
+
+        //
+        // let a = dot(&ray.direction, &ray.direction);
+        //
+        // let b = 2.0 * dot(&ray.origin, &ray.direction);
+        //
+        // let c = dot(&ray.origin, &ray.origin) - radius * radius;
+        //
+        // let discriminant = b * b - 4.0 * a * c;
+        //
+        // // println!(" Coords: [{}, {}] ", x, y);
+        // // println!(" Color:  [{}, {}, {} -> {}] ", a, b, c, discriminant);
+        //
+        // match discriminant >= 0.0 {
+        //     true => Rgb([125.0 as u8, 128.0 as u8, 18.0 as u8]),
+        //     false => Rgb([(x * 255.0) as u8, (y * 255.0) as u8, 55.0 as u8]),
+        // }
     }
 
     pub fn set_pixel_with_art_style(x : u32, y : u32, scalex : f32, scaley : f32) -> Rgb<u8> {
@@ -258,5 +273,47 @@ impl<'a> Layer<'a> {
         imgbuf.save(path).unwrap();
 
         Ok(imgbuf)
+    }
+
+    pub fn ray_intersect_sphere(ray : &mut Ray, sphere : Sphere) -> f32 {
+
+        let oc = ray.origin - sphere.center.xyz();
+
+        let a = dot(&ray.direction, &ray.direction);
+
+        let b = dot(&oc, &ray.direction);
+
+        let c = dot(&oc, &oc) - sphere.radius * sphere.radius;
+
+        let discriminant = b * b - 4.0 * a * c;
+
+        if discriminant < 0.0 {
+
+            return -1.0;
+        }
+
+        (-b - num::Float::sqrt(discriminant)) / (2.0 * a)
+    }
+
+    pub fn sphere_intersection(ray : Ray, sphere : Sphere, t : f32) -> Intersection {
+
+        let p = Self::ray_point_at_parameter(ray, t);
+
+        let n = (1.0 / sphere.radius) * (p - sphere.center.xyz());
+
+        let theta = acos(&-n.yy()).len() as f32;
+
+        let phi = atan2(&-n.zz(), &n.xx()).len() as f32 + PI;
+
+        let u = 0.5 * FRAC_1_PI * phi;
+
+        let v = FRAC_1_PI * theta;
+
+        return Intersection { p, n, u, v, t };
+    }
+
+    pub fn ray_point_at_parameter(ray : Ray, t : f32) -> Vec3 {
+
+        return ray.origin + t * ray.direction;
     }
 }
