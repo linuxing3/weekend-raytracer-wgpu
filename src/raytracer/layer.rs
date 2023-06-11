@@ -4,7 +4,7 @@ use std::{
     sync::Arc,
 };
 
-use crate::fly_camera::{camera_orientation, FlyCameraController};
+use crate::fly_camera::{self, camera_orientation, FlyCameraController};
 
 use super::{texture::*, Angle, Intersection, Ray, Sphere};
 use image::{DynamicImage, ImageBuffer, Rgb};
@@ -199,32 +199,17 @@ impl<'a> Layer<'a> {
         let focal_length = 1.0;
 
         // make ray
+        // let camera_controller = FlyCameraController::default();
         //
-        let look_from = glm::vec3(0.0, 0.0, 0.0);
-
-        let look_at = glm::vec3(0.0, 1.0, 0.0);
-
-        let focus_distance = glm::magnitude(&(look_at - look_from));
-
-        let camera_controller = FlyCameraController {
-            position : look_from,
-            yaw : Angle::degrees(25_f32),
-            pitch : Angle::degrees(-10_f32),
-            vfov_degrees : 30.0,
-            aperture : 0.8,
-            focus_distance,
-            forward_pressed : false,
-            backward_pressed : false,
-            left_pressed : false,
-            right_pressed : false,
-            up_pressed : false,
-            down_pressed : false,
-            look_pressed : false,
-            previous_mouse_pos : None,
-            mouse_pos : (0.0, 0.0),
-        };
-
-        let origin = camera_controller.position;
+        // let direction = fly_camera::generate_camera_ray_dir(
+        //     &camera_controller,
+        //     camera_controller.mouse_pos,
+        //     (600, 400),
+        // );
+        //
+        // let origin = camera_controller.position;
+        //
+        let origin = glm::vec3(0.0, 0.0, 0.0);
 
         let horizontal = glm::vec3(viewport_width, 0.0, 0.0);
 

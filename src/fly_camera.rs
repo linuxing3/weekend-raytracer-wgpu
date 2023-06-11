@@ -24,9 +24,12 @@ pub struct FlyCameraController {
 impl Default for FlyCameraController {
     fn default() -> Self {
 
-        let look_from = glm::vec3(-10.0, 2.0, -4.0);
+        // let look_from = glm::vec3(-10.0, 2.0, -4.0);
+        // let look_at = glm::vec3(0.0, 1.0, 0.0);
 
-        let look_at = glm::vec3(0.0, 1.0, 0.0);
+        let look_from = glm::vec3(0.0, 0.0, 0.0);
+
+        let look_at = glm::vec3(0.0, 0.0, -1.0);
 
         let focus_distance = glm::magnitude(&(look_at - look_from));
 
@@ -203,7 +206,7 @@ impl FlyCameraController {
     }
 }
 
-fn generate_camera_ray_dir(
+pub fn generate_camera_ray_dir(
     camera : &FlyCameraController,
     mouse_pos : (f32, f32),
     viewport_size : (u32, u32),
