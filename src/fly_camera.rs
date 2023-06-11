@@ -24,8 +24,34 @@ pub struct FlyCameraController {
 impl Default for FlyCameraController {
     fn default() -> Self {
 
-        // let look_from = glm::vec3(-10.0, 2.0, -4.0);
-        // let look_at = glm::vec3(0.0, 1.0, 0.0);
+        let look_from = glm::vec3(-10.0, 2.0, -4.0);
+
+        let look_at = glm::vec3(0.0, 1.0, 0.0);
+
+        let focus_distance = glm::magnitude(&(look_at - look_from));
+
+        Self {
+            position : look_from,
+            yaw : Angle::degrees(25_f32),
+            pitch : Angle::degrees(-10_f32),
+            vfov_degrees : 30.0,
+            aperture : 0.8,
+            focus_distance,
+            forward_pressed : false,
+            backward_pressed : false,
+            left_pressed : false,
+            right_pressed : false,
+            up_pressed : false,
+            down_pressed : false,
+            look_pressed : false,
+            previous_mouse_pos : None,
+            mouse_pos : (0.0, 0.0),
+        }
+    }
+}
+
+impl FlyCameraController {
+    pub fn for_imgui() -> Self {
 
         let look_from = glm::vec3(0.0, 0.0, 0.0);
 
@@ -51,9 +77,7 @@ impl Default for FlyCameraController {
             mouse_pos : (0.0, 0.0),
         }
     }
-}
 
-impl FlyCameraController {
     pub fn renderer_camera(&self) -> Camera {
 
         let orientation = camera_orientation(self);

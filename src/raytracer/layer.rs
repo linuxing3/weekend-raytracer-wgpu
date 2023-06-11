@@ -110,19 +110,38 @@ impl<'a> Layer<'a> {
 
         let mut new_imgui_region_size = None;
 
-        let origin = self.camera_controller.position;
-
         window
             .size(self.size, imgui::Condition::FirstUseEver)
             .build(|| {
 
+                ui.separator();
+
+                ui.text("Imgui Camera parameters");
+
+                ui.slider(
+                    "origin x",
+                    0.0,
+                    10.0,
+                    &mut self.camera_controller.position.x,
+                );
+
+                ui.slider(
+                    "origin y",
+                    0.0,
+                    10.0,
+                    &mut self.camera_controller.position.y,
+                );
+
+                ui.slider(
+                    "origin.z",
+                    -10.0,
+                    10.0,
+                    &mut self.camera_controller.position.z,
+                );
+
+                ui.separator();
+
                 new_imgui_region_size = Some(ui.content_region_avail());
-
-                ui.text(format!("ray origin x: {}", origin.x));
-
-                ui.text(format!("ray origin y: {}", origin.y));
-
-                ui.text(format!("ray origin z: {}", origin.z));
 
                 imgui::Image::new(self.texture_id, new_imgui_region_size.unwrap()).build(ui);
             });
