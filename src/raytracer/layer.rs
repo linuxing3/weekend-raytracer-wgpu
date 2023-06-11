@@ -6,7 +6,7 @@ use std::{
 
 use crate::fly_camera::{camera_orientation, FlyCameraController};
 
-use super::{texture::*, Intersection, Ray, Sphere};
+use super::{texture::*, Angle, Intersection, Ray, Sphere};
 use image::{DynamicImage, ImageBuffer, Rgb};
 use imgui::TextureId;
 use nalgebra_glm::{acos, atan2, dot, Vec3};
@@ -30,17 +30,17 @@ impl<'a> Layer<'a> {
         let mut new_imgbuf = ImageBuffer::new(width as u32, height as u32);
 
         // A redundant loop to demonstrate reading image data
-        for j in 0..height as u32 {
+        for y in 0..height as u32 {
 
-            for i in 0..width as u32 {
+            for x in 0..width as u32 {
 
-                let pixel = new_imgbuf.get_pixel_mut(i, j);
+                let pixel = new_imgbuf.get_pixel_mut(x, y);
 
-                let x = (i as f32 / width) * 2.0 - 1.0;
+                let u = (x as f32 / width) * 2.0 - 1.0;
 
-                let y = (j as f32 / height) * 2.0 - 1.0;
+                let v = (y as f32 / height) * 2.0 - 1.0;
 
-                *pixel = Self::per_pixel(x, y);
+                *pixel = Self::per_pixel(u, v);
             }
         }
 
@@ -110,13 +110,7 @@ impl<'a> Layer<'a> {
 
         let mut new_imgui_region_size = None;
 
-        let orientation = camera_orientation(&self.camera_controller);
-
         let origin = self.camera_controller.position;
-
-        let direction = orientation.forward - origin;
-
-        let ray = Ray { origin, direction };
 
         window
             .size(self.size, imgui::Condition::FirstUseEver)
@@ -124,17 +118,11 @@ impl<'a> Layer<'a> {
 
                 new_imgui_region_size = Some(ui.content_region_avail());
 
-                ui.text(format!("ray origin x: {}", ray.origin.x));
+                ui.text(format!("ray origin x: {}", origin.x));
 
-                ui.text(format!("ray origin y: {}", ray.origin.y));
+                ui.text(format!("ray origin y: {}", origin.y));
 
-                ui.text(format!("ray origin z: {}", ray.origin.z));
-
-                ui.text(format!("ray direction x: {}", direction.x));
-
-                ui.text(format!("ray direction y: {}", direction.y));
-
-                ui.text(format!("ray direction z: {}", direction.z));
+                ui.text(format!("ray origin z: {}", origin.z));
 
                 imgui::Image::new(self.texture_id, new_imgui_region_size.unwrap()).build(ui);
             });
@@ -154,17 +142,17 @@ impl<'a> Layer<'a> {
         let mut new_imgbuf = ImageBuffer::new(width as u32, height as u32);
 
         // A redundant loop to demonstrate reading image data
-        for j in 0..height as u32 {
+        for y in 0..height as u32 {
 
-            for i in 0..width as u32 {
+            for x in 0..width as u32 {
 
-                let pixel = new_imgbuf.get_pixel_mut(i, j);
+                let pixel = new_imgbuf.get_pixel_mut(x, y);
 
-                let x = (i as f32 / width) * 2.0 - 1.0;
+                let u = (x as f32 / width) * 2.0 - 1.0;
 
-                let y = (j as f32 / height) * 2.0 - 1.0;
+                let v = (y as f32 / height) * 2.0 - 1.0;
 
-                *pixel = self.update_pixel(x, y);
+                *pixel = self.update_pixel(u, v);
             }
         }
 
@@ -200,28 +188,73 @@ impl<'a> Layer<'a> {
 
     pub fn per_pixel(x : f32, y : f32) -> Rgb<u8> {
 
-        let mut ray_sptr = Arc::new(Ray::new2(x, y));
+        let (u, v) = (x, y);
 
-        let radius = 0.5_f32;
+        let aspect_ratio = 16.0 / 9.0 as f32;
+
+        let viewport_height = 2.0;
+
+        let viewport_width = aspect_ratio * viewport_height;
+
+        let focal_length = 1.0;
+
+        // make ray
+        //
+        let look_from = glm::vec3(0.0, 0.0, 0.0);
+
+        let look_at = glm::vec3(0.0, 1.0, 0.0);
+
+        let focus_distance = glm::magnitude(&(look_at - look_from));
+
+        let camera_controller = FlyCameraController {
+            position : look_from,
+            yaw : Angle::degrees(25_f32),
+            pitch : Angle::degrees(-10_f32),
+            vfov_degrees : 30.0,
+            aperture : 0.8,
+            focus_distance,
+            forward_pressed : false,
+            backward_pressed : false,
+            left_pressed : false,
+            right_pressed : false,
+            up_pressed : false,
+            down_pressed : false,
+            look_pressed : false,
+            previous_mouse_pos : None,
+            mouse_pos : (0.0, 0.0),
+        };
+
+        let origin = camera_controller.position;
+
+        let horizontal = glm::vec3(viewport_width, 0.0, 0.0);
+
+        let vertical = glm::vec3(0.0, viewport_height, 0.0);
+
+        let lower_left_color =
+            origin - horizontal / 2.0 - vertical / 2.0 - glm::vec3(0.0, 0.0, focal_length);
+
+        let direction = lower_left_color + (u + 0.5) * horizontal + (v + 0.5) * vertical;
+
+        let mut ray_sptr = Box::new(Ray::new(origin, direction));
+
+        // make sphere
+        let radius = 0.8_f32;
 
         let sphere = Sphere::new(glm::vec3(0.0, 0.0, -1.0), radius, 1);
 
         // t
-        let t = Self::ray_intersect_sphere(&mut ray_sptr, sphere, 0.0, num::Float::max_value());
+        let root = Self::ray_intersect_sphere(&mut ray_sptr, sphere, 0.0, num::Float::max_value());
 
-        let hit = Self::sphere_intersection(&mut ray_sptr, sphere, t);
+        let hit = Self::sphere_intersection(&mut ray_sptr, sphere, root);
 
-        let unit_normal = hit.n.normalize();
+        let nn = hit.n.normalize();
 
         let [r, g, b] : [u8; 3] = [
-            ((unit_normal.x) * 255.0) as u8,
-            ((unit_normal.y) * 255.0) as u8,
-            ((unit_normal.z) * 255.0) as u8,
+            ((nn.x) * 255.0) as u8,
+            ((nn.y) * 255.0) as u8,
+            ((nn.z) * 255.0) as u8,
         ];
 
-        println!(" Color:  [{}, {}, {} ] ", r, g, b);
-
-        // println!(" Coords: [{}, {}] ", x, y);
         let hit_color = Rgb([r, g, b]);
 
         let background_color = Rgb([(x * 255.0) as u8, (y * 255.0) as u8, 55.0 as u8]);
@@ -293,26 +326,28 @@ impl<'a> Layer<'a> {
 
         let a = dot(&ray.direction, &ray.direction);
 
-        let b = dot(&oc, &ray.direction);
+        let half_b = dot(&oc, &ray.direction);
 
         let c = dot(&oc, &oc) - sphere.radius * sphere.radius;
 
-        let discriminant = b * b - 4.0 * a * c;
+        let discriminant = half_b * half_b - a * c;
 
         if discriminant > 0.0 {
 
-            let mut t = (-b - num::Float::sqrt(discriminant)) / a;
+            // closet T
+            let mut root = (-half_b - num::Float::sqrt(discriminant)) / a;
 
-            if t < tmax && t > tmin {
+            if root < tmax && root > tmin {
 
-                return t;
+                return root;
             }
 
-            t = (-b + num::Float::sqrt(discriminant)) / a;
+            // farest T
+            root = (-half_b + num::Float::sqrt(discriminant)) / a;
 
-            if t < tmax && t > tmin {
+            if root < tmax && root > tmin {
 
-                return t;
+                return root;
             }
         }
 
@@ -321,23 +356,26 @@ impl<'a> Layer<'a> {
 
     pub fn sphere_intersection(ray : &Ray, sphere : Sphere, t : f32) -> Intersection {
 
-        let p = Self::ray_point_at_parameter(ray, t);
+        // p = ray.at(t)
+        let p = Self::ray_point_at_t(ray, t);
 
+        // normal = P -c
         let n = (1.0 / sphere.radius) * (p - sphere.center.xyz());
 
+        // ?
         let theta = acos(&-n.yy()).len() as f32;
 
+        // ?
         let phi = atan2(&-n.zz(), &n.xx()).len() as f32 + PI;
 
+        // position.u on viewport
         let u = 0.5 * FRAC_1_PI * phi;
 
+        // position.v on viewport
         let v = FRAC_1_PI * theta;
 
         return Intersection { p, n, u, v, t };
     }
 
-    pub fn ray_point_at_parameter(ray : &Ray, t : f32) -> Vec3 {
-
-        return ray.origin + t * ray.direction;
-    }
+    pub fn ray_point_at_t(ray : &Ray, t : f32) -> Vec3 { return ray.origin + t * ray.direction; }
 }
