@@ -149,6 +149,8 @@ fn main() {
                             context
                                 .surface
                                 .configure(&context.device, &context.surface_config);
+
+                            // layer.resize(&render_params);
                         }
                     }
 
@@ -164,6 +166,8 @@ fn main() {
                             context
                                 .surface
                                 .configure(&context.device, &context.surface_config);
+
+                            // layer.resize(&render_params);
                         }
                     }
 

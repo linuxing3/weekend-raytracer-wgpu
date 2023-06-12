@@ -970,4 +970,37 @@ pub struct Intersection {
     u: f32,
     v: f32,
     t: f32,
+    f: bool,
+}
+
+impl Intersection {
+    pub fn set_face_normal(
+        &mut self,
+        ray: &Ray,
+        outward_normal: Vec3,
+    ) {
+        self.f = glm::dot(&ray.direction, &outward_normal) < 0.0;
+        match self.f {
+            true => {
+                self.n = outward_normal;
+            }
+            false => {
+                self.n = -outward_normal;
+            }
+        }
+    }
+}
+
+pub trait Hittable {
+    fn trace_ray(
+        ray: &Ray,
+        sphere: Sphere,
+        tmin: f32,
+        tmax: f32,
+    ) -> (f32, Intersection);
+    fn get_ray_hit(
+        ray: &Ray,
+        sphere: Sphere,
+        t: f32,
+    ) -> Intersection;
 }

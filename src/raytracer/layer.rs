@@ -6,8 +6,8 @@ use std::f32::{
 use crate::fly_camera::FlyCameraController;
 
 use super::{
-    math::*, texture::*, GpuCamera, Intersection, Ray, RenderParams, RenderParamsValidationError,
-    Sphere,
+    math::*, texture::*, GpuCamera, Hittable, Intersection, Ray, RenderParams,
+    RenderParamsValidationError, Sphere,
 };
 use image::{DynamicImage, ImageBuffer, Rgb};
 use imgui::TextureId;
@@ -125,6 +125,8 @@ impl Layer {
 
             let new_imgbuf = ImageBuffer::new(v_width, v_height);
             self.imgbuf = Box::into_raw(Box::new(new_imgbuf));
+
+            self.set_data(render_params);
         };
     }
 
@@ -144,7 +146,7 @@ impl Layer {
 
                     let v = coord_to_color(y, height);
 
-                    *pixel = self.per_pixel(u, v);
+                    *pixel = self.per_pixel(u, v, render_params);
                 }
             }
         }
@@ -155,6 +157,7 @@ impl Layer {
         &mut self,
         x: f32,
         y: f32,
+        render_params: &RenderParams,
     ) -> Rgb<u8> {
         let (u, v) = (x, y);
 
@@ -163,7 +166,8 @@ impl Layer {
             let mut pixel_color = Rgb([0_u8, 0_u8, 0_u8]);
             // NOTE:: multisampling
             // https://raytracing.github.io/images/fig-1.07-pixel-samples.jpg
-            for _s in 0..100 {
+            let sampleing_nums = render_params.sampling.num_samples_per_pixel;
+            for _s in 0..sampleing_nums {
                 let su = u + random_double();
                 let sv = v + random_double();
 
@@ -200,35 +204,6 @@ impl Layer {
         rgb8_from_vec3([0.0, 0.0, 0.0])
     }
 
-    // NOTE:
-    pub fn per_pixel_no_multisampling(
-        &mut self,
-        x: f32,
-        y: f32,
-    ) -> Rgb<u8> {
-        let (u, v) = ((x + 1.0) / 2.0, (y + 1.0) / 2.0);
-
-        let mut ray = self.camera.make_ray(u, v);
-        // pixel color for multisampling
-        for sphere in &self.world {
-            let (_root, hit) = Self::trace_ray(&mut ray, *sphere, 0.0, num::Float::max_value());
-
-            let nn = hit.n.normalize();
-
-            let ray_color = rgb8_from_vec3([nn.x, nn.y, nn.z]);
-
-            let background_color = rgb8_from_vec3([x, y, 50.0]);
-            if hit.t >= 0.0 {
-                return ray_color;
-            } else {
-                return background_color;
-            }
-        }
-
-        // when world is empty
-        rgb8_from_vec3([0.0, 0.0, 0.0])
-    }
-
     pub fn set_pixel_with_art_style(
         x: u32,
         y: u32,
@@ -254,40 +229,17 @@ impl Layer {
         Rgb([i as u8, i as u8, i as u8])
     }
 
-    pub fn new_from_image_buffer(
-        width: u32,
-        height: u32,
-        path: &str,
-    ) -> Result<XImageBuffer, TextureError> {
-        // Create a new ImgBuf with width: imgx and height: imgy
-        let imgbuf = ImageBuffer::new(width, height);
-
-        // Save the image as “fractal.png”, the format is deduced from the path
-        imgbuf.save(path).unwrap();
-
-        Ok(imgbuf)
-    }
-
-    pub fn ray_intersect_circle(
+    pub fn ray_point_at_t(
         ray: &Ray,
-        radius: f32,
-    ) -> f32 {
-        let a = dot(&ray.direction, &ray.direction);
-
-        let b = dot(&ray.origin, &ray.direction);
-
-        let c = dot(&ray.origin, &ray.origin) - radius * radius;
-
-        let discriminant = b * b - a * c;
-
-        if discriminant < 0.0 {
-            return -1.0;
-        }
-
-        return (-b - num::Float::sqrt(discriminant)) / a;
+        t: f32,
+    ) -> Vec3 {
+        return ray.origin + t * ray.direction;
     }
+}
 
-    pub fn trace_ray(
+impl Hittable for Layer {
+    // add code here
+    fn trace_ray(
         ray: &Ray,
         sphere: Sphere,
         tmin: f32,
@@ -326,7 +278,7 @@ impl Layer {
         return (-1.0, hit);
     }
 
-    pub fn get_ray_hit(
+    fn get_ray_hit(
         ray: &Ray,
         sphere: Sphere,
         t: f32,
@@ -334,9 +286,16 @@ impl Layer {
         // p = ray.at(t)
         let p = Self::ray_point_at_t(ray, t);
 
-        // NOTE: normal = P -c
+        // normal = P -c
         // https://raytracing.github.io/images/fig-1.05-sphere-normal.jpg
-        let n = (1.0 / sphere.radius) * (p - sphere.center.xyz());
+        let mut n = (1.0 / sphere.radius) * (p - sphere.center.xyz());
+
+        // front face?
+        let f = glm::dot(&ray.direction, &n) < 0.0;
+        n = match f {
+            true => n,
+            false => -n,
+        };
 
         // ?
         let theta = acos(&-n.yy()).len() as f32;
@@ -350,13 +309,6 @@ impl Layer {
         // position.v on viewport
         let v = FRAC_1_PI * theta;
 
-        return Intersection { p, n, u, v, t };
-    }
-
-    pub fn ray_point_at_t(
-        ray: &Ray,
-        t: f32,
-    ) -> Vec3 {
-        return ray.origin + t * ray.direction;
+        return Intersection { p, n, u, v, t, f };
     }
 }
