@@ -31,7 +31,6 @@ impl<'a> Layer<'a> {
 
         let sphere1 = Sphere::new(glm::vec3(0.0, 0.0, -1.0), 0.5, 1);
         let sphere2 = Sphere::new(glm::vec3(0.0, -100.5, -1.0), 10.0, 1);
-
         let world = vec![sphere1, sphere2];
 
         let texture_id = TextureId::new(0);
@@ -148,6 +147,7 @@ impl<'a> Layer<'a> {
         }
     }
 
+    // NOTE:
     pub fn per_pixel(
         &mut self,
         x: f32,
@@ -157,9 +157,9 @@ impl<'a> Layer<'a> {
 
         // pixel color for multisampling
         for sphere in &self.world {
-            let mut _pixel_color = Rgb([0_u8, 0_u8, 0_u8]);
+            let mut pixel_color = Rgb([0_u8, 0_u8, 0_u8]);
             // multisampling
-            for _s in 0..50 {
+            for _s in 0..100 {
                 // FIXME: include random (-1.0 - 1.0)
                 let su = u + 0.010;
                 let sv = v + 0.010;
@@ -172,17 +172,18 @@ impl<'a> Layer<'a> {
 
                 let ray_color = rgb8_from_vec3([nn.x, nn.y, nn.z]);
 
-                _pixel_color = add_rgb8(_pixel_color, ray_color);
+                pixel_color = plus_rgb8(pixel_color, ray_color);
 
                 let background_color = rgb8_from_vec3([x, y, 50.0]);
                 if hit.t >= 0.0 {
-                    return _pixel_color;
+                    return pixel_color;
                 } else {
                     return background_color;
                 }
             }
         }
 
+        // when world is empty
         rgb8_from_vec3([0.0, 0.0, 0.0])
     }
 
@@ -359,6 +360,4 @@ impl Default for ImguiCamera {
             lower_left_color,
         }
     }
-
-    // add code here
 }

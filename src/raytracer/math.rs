@@ -9,7 +9,7 @@ pub fn coord_to_color(
 pub fn to_rgb8(x: f32) -> u8 {
     (x * 255.0) as u8
 }
-pub fn add_rgb8(
+pub fn plus_rgb8(
     color1: Rgb<u8>,
     color2: Rgb<u8>,
 ) -> Rgb<u8> {
