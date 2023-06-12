@@ -24,7 +24,6 @@ mod fly_camera;
 mod raytracer;
 
 fn main() {
-
     let event_loop = EventLoop::new();
 
     let window = WindowBuilder::new()
@@ -36,7 +35,6 @@ fn main() {
     let mut context = pollster::block_on(GpuContext::new(&window));
 
     let viewport_size = {
-
         let viewport = window.inner_size();
 
         (viewport.width, viewport.height)
@@ -45,7 +43,6 @@ fn main() {
     let max_viewport_resolution = window
         .available_monitors()
         .map(|monitor| -> u32 {
-
             let size = monitor.size();
 
             size.width * size.height
@@ -58,9 +55,9 @@ fn main() {
     let mut fly_camera_controller = FlyCameraController::default();
 
     let mut render_params = RenderParams {
-        camera : fly_camera_controller.renderer_camera(),
-        sky : SkyParams::default(),
-        sampling : SamplingParams::default(),
+        camera: fly_camera_controller.renderer_camera(),
+        sky: SkyParams::default(),
+        sampling: SamplingParams::default(),
         viewport_size,
     };
 
@@ -94,14 +91,14 @@ fn main() {
     imgui
         .fonts()
         .add_font(&[imgui::FontSource::DefaultFontData {
-            config : Some(imgui::FontConfig {
-                size_pixels : font_size,
+            config: Some(imgui::FontConfig {
+                size_pixels: font_size,
                 ..Default::default()
             }),
         }]);
 
     let imgui_renderer_config = imgui_wgpu::RendererConfig {
-        texture_format : context.surface_config.format,
+        texture_format: context.surface_config.format,
         ..Default::default()
     };
 
@@ -125,29 +122,24 @@ fn main() {
 
     let mut layer = Layer::new([600.0, 400.0], "Tracer", path);
 
+    layer.set_data();
+
     layer.register_texture(&context.device, &context.queue, &mut imgui_renderer);
 
     event_loop.run(move |event, _, _control_flow| {
-
         imgui_platform.handle_event(imgui.io_mut(), &window, &event);
 
         match event {
             Event::WindowEvent { event, .. } => {
-
                 fly_camera_controller.handle_event(&event);
-
-                layer.camera_controller.handle_event(&event);
 
                 match event {
                     WindowEvent::CloseRequested => {
-
                         *_control_flow = ControlFlow::Exit;
                     }
 
                     WindowEvent::Resized(physical_size) => {
-
                         if physical_size.width > 0 && physical_size.height > 0 {
-
                             render_params.viewport_size =
                                 (physical_size.width, physical_size.height);
 
@@ -165,9 +157,7 @@ fn main() {
                     }
 
                     WindowEvent::ScaleFactorChanged { new_inner_size, .. } => {
-
                         if new_inner_size.width > 0 && new_inner_size.height > 0 {
-
                             render_params.viewport_size =
                                 (new_inner_size.width, new_inner_size.height);
 
@@ -191,11 +181,9 @@ fn main() {
             }
 
             Event::MainEventsCleared => {
-
                 let dt = last_time.elapsed().as_secs_f32();
 
                 {
-
                     let now = Instant::now();
 
                     fps_counter.update(dt);
@@ -208,11 +196,6 @@ fn main() {
                 }
 
                 {
-
-                    layer
-                        .camera_controller
-                        .after_events(render_params.viewport_size, 2.0 * dt);
-
                     imgui_platform
                         .prepare_frame(imgui.io_mut(), &window)
                         .expect("WinitPlatform::prepare_frame failed");
@@ -221,7 +204,6 @@ fn main() {
 
                     // HACK:
                     {
-
                         // for _layer in &mut layer_stack {
                         //
                         layer.render(ui);
@@ -229,13 +211,11 @@ fn main() {
                     }
 
                     {
-
                         let window = ui.window("Parameters");
 
                         window
                             .size([300.0, 300.0], imgui::Condition::FirstUseEver)
                             .build(|| {
-
                                 ui.text(format!(
                                     "FPS: {:.1}, render progress: {:.1} %",
                                     fps_counter.average_fps(),
@@ -360,7 +340,6 @@ fn main() {
                     }
 
                     if last_cursor != Some(ui.mouse_cursor()) {
-
                         last_cursor = Some(ui.mouse_cursor());
 
                         imgui_platform.prepare_render(&ui, &window);
@@ -369,11 +348,8 @@ fn main() {
 
                 render_params.camera = fly_camera_controller.renderer_camera();
 
-                render_params.camera = layer.camera_controller.renderer_camera();
-
                 match raytracer.set_render_params(&context.queue, &render_params) {
                     Err(e) => {
-
                         eprintln!("Error setting render params: {e}")
                     }
                     _ => {}
@@ -383,11 +359,9 @@ fn main() {
             }
 
             Event::RedrawRequested(window_id) if window_id == window.id() => {
-
                 let frame = match context.surface.get_current_texture() {
                     Ok(frame) => frame,
                     Err(e) => {
-
                         eprintln!("Surface error: {:?}", e);
 
                         return;
@@ -400,26 +374,25 @@ fn main() {
 
                 let mut encoder = context
                     .device
-                    .create_command_encoder(&wgpu::CommandEncoderDescriptor { label : None });
+                    .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
                 {
-
                     let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                        color_attachments : &[Some(wgpu::RenderPassColorAttachment {
-                            view : &view,
-                            resolve_target : None,
-                            ops : wgpu::Operations {
-                                load : wgpu::LoadOp::Clear(wgpu::Color {
-                                    r : 0.012,
-                                    g : 0.012,
-                                    b : 0.012,
-                                    a : 1.0,
+                        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                            view: &view,
+                            resolve_target: None,
+                            ops: wgpu::Operations {
+                                load: wgpu::LoadOp::Clear(wgpu::Color {
+                                    r: 0.012,
+                                    g: 0.012,
+                                    b: 0.012,
+                                    a: 1.0,
                                 }),
-                                store : true,
+                                store: true,
                             },
                         })],
-                        depth_stencil_attachment : None,
-                        label : None,
+                        depth_stencil_attachment: None,
+                        label: None,
                     });
 
                     raytracer.render_frame(&context.queue, &mut render_pass);
@@ -446,22 +419,20 @@ fn main() {
 }
 
 pub struct GpuContext {
-    device : wgpu::Device,
-    queue : wgpu::Queue,
-    surface : wgpu::Surface,
-    surface_config : wgpu::SurfaceConfiguration,
+    device: wgpu::Device,
+    queue: wgpu::Queue,
+    surface: wgpu::Surface,
+    surface_config: wgpu::SurfaceConfiguration,
 }
 
 impl GpuContext {
-    async fn new(window : &Window) -> Self {
-
+    async fn new(window: &Window) -> Self {
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
-            backends : wgpu::Backends::all(),
+            backends: wgpu::Backends::all(),
             ..Default::default()
         });
 
         let surface = unsafe {
-
             instance
                 .create_surface(window)
                 .expect("Surface creation should succeed on desktop")
@@ -469,9 +440,9 @@ impl GpuContext {
 
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
-                power_preference : wgpu::PowerPreference::default(),
-                force_fallback_adapter : false,
-                compatible_surface : Some(&surface),
+                power_preference: wgpu::PowerPreference::default(),
+                force_fallback_adapter: false,
+                compatible_surface: Some(&surface),
             })
             .await
             .expect("Adapter should be available on desktop");
@@ -479,12 +450,12 @@ impl GpuContext {
         let (device, queue) = adapter
             .request_device(
                 &wgpu::DeviceDescriptor {
-                    features : wgpu::Features::empty(),
-                    limits : wgpu::Limits {
-                        max_storage_buffer_binding_size : 512_u32 << 20,
+                    features: wgpu::Features::empty(),
+                    limits: wgpu::Limits {
+                        max_storage_buffer_binding_size: 512_u32 << 20,
                         ..Default::default()
                     },
-                    label : None,
+                    label: None,
                 },
                 None,
             )
@@ -497,13 +468,13 @@ impl GpuContext {
         // You can check supported configs, such as formats, by calling
         // Surface::capabilities
         let surface_config = wgpu::SurfaceConfiguration {
-            usage : wgpu::TextureUsages::RENDER_ATTACHMENT,
-            format : wgpu::TextureFormat::Bgra8UnormSrgb,
-            width : window_size.width,
-            height : window_size.height,
-            present_mode : wgpu::PresentMode::Fifo,
-            alpha_mode : wgpu::CompositeAlphaMode::Auto,
-            view_formats : vec![wgpu::TextureFormat::Bgra8Unorm],
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            format: wgpu::TextureFormat::Bgra8UnormSrgb,
+            width: window_size.width,
+            height: window_size.height,
+            present_mode: wgpu::PresentMode::Fifo,
+            alpha_mode: wgpu::CompositeAlphaMode::Auto,
+            view_formats: vec![wgpu::TextureFormat::Bgra8Unorm],
         };
 
         surface.configure(&device, &surface_config);
@@ -518,57 +489,55 @@ impl GpuContext {
 }
 
 struct FpsCounter {
-    frame_times : VecDeque<f32>,
+    frame_times: VecDeque<f32>,
 }
 
 impl FpsCounter {
-    const MAX_FRAME_TIMES : usize = 8;
+    const MAX_FRAME_TIMES: usize = 8;
 
     pub fn new() -> Self {
-
         Self {
-            frame_times : VecDeque::with_capacity(Self::MAX_FRAME_TIMES),
+            frame_times: VecDeque::with_capacity(Self::MAX_FRAME_TIMES),
         }
     }
 
-    pub fn update(&mut self, dt : f32) {
-
+    pub fn update(
+        &mut self,
+        dt: f32,
+    ) {
         self.frame_times.push_back(dt);
 
         if self.frame_times.len() > Self::MAX_FRAME_TIMES {
-
             self.frame_times.pop_front();
         }
     }
 
     pub fn average_fps(&self) -> f32 {
-
-        let sum : f32 = self.frame_times.iter().sum();
+        let sum: f32 = self.frame_times.iter().sum();
 
         self.frame_times.len() as f32 / sum
     }
 }
 
 fn scene() -> Scene {
-
     let materials = vec![
         Material::Checkerboard {
-            even : Texture::new_from_color(glm::vec3(0.5_f32, 0.7_f32, 0.8_f32)),
-            odd : Texture::new_from_color(glm::vec3(0.9_f32, 0.9_f32, 0.9_f32)),
+            even: Texture::new_from_color(glm::vec3(0.5_f32, 0.7_f32, 0.8_f32)),
+            odd: Texture::new_from_color(glm::vec3(0.9_f32, 0.9_f32, 0.9_f32)),
         },
         Material::Lambertian {
-            albedo : Texture::new_from_image("assets/moon.jpeg")
+            albedo: Texture::new_from_image("assets/moon.jpeg")
                 .expect("Hardcoded path should be valid"),
         },
         Material::Metal {
-            albedo : Texture::new_from_color(glm::vec3(1_f32, 0.85_f32, 0.57_f32)),
-            fuzz : 0.4_f32,
+            albedo: Texture::new_from_color(glm::vec3(1_f32, 0.85_f32, 0.57_f32)),
+            fuzz: 0.4_f32,
         },
         Material::Dielectric {
-            refraction_index : 1.5_f32,
+            refraction_index: 1.5_f32,
         },
         Material::Lambertian {
-            albedo : Texture::new_from_image("assets/earthmap.jpeg")
+            albedo: Texture::new_from_image("assets/earthmap.jpeg")
                 .expect("Hardcoded path should be valid"),
         },
     ];
@@ -584,20 +553,19 @@ fn scene() -> Scene {
     Scene { spheres, materials }
 }
 
-pub fn create_empty_texels(width : usize, height : usize) -> Vec<u8> {
-
+pub fn create_empty_texels(
+    width: usize,
+    height: usize,
+) -> Vec<u8> {
     let texture_data = vec![155, 0, 0, 255];
 
     (0..width * height)
         .map(|id| {
-
             // get high five for recognizing this ;)
             let mut count = 15;
 
             for color_bit in 0..3 {
-
                 if (id % 4) == color_bit {
-
                     count = texture_data[color_bit];
                 }
             }
