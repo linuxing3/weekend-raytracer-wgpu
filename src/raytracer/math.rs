@@ -1,4 +1,5 @@
 use image::Rgb;
+use nalgebra_glm::{vec3, Vec3};
 pub fn coord_to_color(
     u_or_v: u32,
     w_or_h: f32,
@@ -87,4 +88,35 @@ pub fn clamp<T: std::cmp::PartialOrd>(
         return max;
     };
     return x;
+}
+pub fn random_double() -> f32 {
+    // Returns a random real in [0,1).
+    return rand::random::<f32>() / (std::f32::MAX + 1.0);
+}
+pub fn random_double_rng(
+    min: f32,
+    max: f32,
+) -> f32 {
+    // Returns a random real in [0,1).
+    return min + (max - min) * random_double();
+}
+pub fn vec3_random(
+    min: f32,
+    max: f32,
+) -> Vec3 {
+    vec3(
+        random_double_rng(min, max),
+        random_double_rng(min, max),
+        random_double_rng(min, max),
+    )
+}
+pub fn random_in_unit_sphere() -> Vec3 {
+    loop {
+        if false {
+            break;
+        }
+        let p = vec3_random(-1.0, 1.0);
+        return p;
+    }
+    return glm::vec3(0.0, 0.0, 0.0);
 }

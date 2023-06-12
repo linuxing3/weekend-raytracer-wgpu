@@ -707,6 +707,9 @@ impl GpuCamera {
             _padding5: 0_f32,
         }
     }
+
+    // NOTE: make ray fro camera
+    // https://raytracing.github.io/images/fig-1.03-cam-geom.jpg
     pub fn make_ray(
         &mut self,
         u: f32,

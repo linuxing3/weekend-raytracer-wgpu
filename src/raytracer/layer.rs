@@ -1,4 +1,7 @@
-use std::f32::consts::{FRAC_1_PI, PI};
+use std::f32::{
+    consts::{FRAC_1_PI, PI},
+    MAX,
+};
 
 use crate::fly_camera::FlyCameraController;
 
@@ -155,28 +158,39 @@ impl Layer {
     ) -> Rgb<u8> {
         let (u, v) = (x, y);
 
-        // pixel color for multisampling
-        for sphere in &self.world {
+        // hittable world
+        for hittable in &self.world {
             let mut pixel_color = Rgb([0_u8, 0_u8, 0_u8]);
-            // multisampling
+            // NOTE:: multisampling
+            // https://raytracing.github.io/images/fig-1.07-pixel-samples.jpg
             for _s in 0..100 {
-                let su = u + 0.010;
-                let sv = v + 0.010;
+                let su = u + random_double();
+                let sv = v + random_double();
 
-                // FIXME: include random (-1.0 - 1.0)
+                // NOTE: make ray from camera eye to sphere
+                // https://raytracing.github.io/images/fig-1.04-ray-sphere.jpg
                 let mut ray = self.camera.make_ray(su, sv);
-                let (_root, hit) = Self::trace_ray(&mut ray, *sphere, 0.0, num::Float::max_value());
+                let (_camera_root, camera_hit) =
+                    Self::trace_ray(&mut ray, *hittable, 0.0, num::Float::max_value());
 
-                let nn = hit.n.normalize();
+                // NOTE: difussion
+                // https://raytracing.github.io/images/fig-1.09-rand-vec.jpg
+                let target = camera_hit.p + camera_hit.n + random_in_unit_sphere();
+                let mut unit_ray = Ray::new(camera_hit.p, target - camera_hit.p);
+                // NOTE: make ray from camera-sphere hitting point
+                // to some random point in the unit_normal_sphere
+                let (_unit_root, unit_hit) =
+                    Self::trace_ray(&mut unit_ray, *hittable, 0.0, num::Float::max_value());
+                let nn = unit_hit.n.normalize();
 
                 let ray_color = rgb8_from_vec3([nn.x, nn.y, nn.z]);
 
                 pixel_color = plus_rgb8(pixel_color, ray_color);
 
-                let background_color = rgb8_from_vec3([x, y, 50.0]);
-                if hit.t >= 0.0 {
+                if camera_hit.t >= 0.0 {
                     return pixel_color;
                 } else {
+                    let background_color = rgb8_from_vec3([x, y, 50.0]);
                     return background_color;
                 }
             }
@@ -290,7 +304,8 @@ impl Layer {
         let discriminant = half_b * half_b - a * c;
 
         if discriminant > 0.0 {
-            // closet T
+            // NOTE: closet T
+            // https://raytracing.github.io/images/fig-1.04-ray-sphere.jpg
             let mut root = (-half_b - num::Float::sqrt(discriminant)) / a;
 
             if root < tmax && root > tmin {
@@ -319,7 +334,8 @@ impl Layer {
         // p = ray.at(t)
         let p = Self::ray_point_at_t(ray, t);
 
-        // normal = P -c
+        // NOTE: normal = P -c
+        // https://raytracing.github.io/images/fig-1.05-sphere-normal.jpg
         let n = (1.0 / sphere.radius) * (p - sphere.center.xyz());
 
         // ?
