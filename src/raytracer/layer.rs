@@ -1,14 +1,6 @@
-use std::f32::{
-    consts::{FRAC_1_PI, PI},
-    MAX,
-};
+use std::f32::consts::{FRAC_1_PI, PI};
 
-use crate::fly_camera::FlyCameraController;
-
-use super::{
-    math::*, texture::*, GpuCamera, Hittable, Intersection, Ray, RenderParams,
-    RenderParamsValidationError, Sphere,
-};
+use super::{math::*, texture::*, GpuCamera, Hittable, Intersection, Ray, RenderParams, Sphere};
 use image::{DynamicImage, ImageBuffer, Rgb};
 use imgui::TextureId;
 use nalgebra_glm::{acos, atan2, dot, Vec3};
