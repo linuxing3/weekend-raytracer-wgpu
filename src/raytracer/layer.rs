@@ -27,9 +27,10 @@ impl Layer {
 
         let imgbuf = Box::into_raw(Box::new(new_buffer));
 
+        // Generating hittable objects
         let sphere1 = Sphere::new(glm::vec3(-3.0, -3.0, -1.0), 2.0, 1);
-        // let sphere2 = Sphere::new(glm::vec3(-3.0, -5.0, -1.0), 5.0, 1);
-        let world = vec![sphere1];
+        let sphere2 = Sphere::new(glm::vec3(-3.0, -50.0, -1.0), 51.0, 1);
+        let world = vec![sphere1, sphere2];
 
         let texture_id = TextureId::new(0);
 
@@ -144,7 +145,7 @@ impl Layer {
         }
     }
 
-    // NOTE:
+    // BUG:
     pub fn per_pixel(
         &mut self,
         x: f32,
@@ -165,21 +166,21 @@ impl Layer {
 
                 // NOTE: make ray from camera eye to sphere
                 // https://raytracing.github.io/images/fig-1.04-ray-sphere.jpg
-                let mut ray = self.camera.make_ray(su, sv);
+                let mut ray_from_camera = self.camera.make_ray(su, sv);
                 let (_camera_root, camera_hit) =
-                    Self::trace_ray(&mut ray, *hittable, 0.0, num::Float::max_value());
+                    hittable.trace_ray(&mut ray_from_camera, 0.0, num::Float::max_value());
 
                 // NOTE: difussion
                 // https://raytracing.github.io/images/fig-1.09-rand-vec.jpg
                 let target = camera_hit.p + camera_hit.n + random_in_unit_sphere();
-                let mut unit_ray = Ray::new(camera_hit.p, target - camera_hit.p);
+                let mut unit_ray_from_p = Ray::new(camera_hit.p, target - camera_hit.p);
                 // NOTE: make ray from camera-sphere hitting point
                 // to some random point in the unit_normal_sphere
                 let (_unit_root, unit_hit) =
-                    Self::trace_ray(&mut unit_ray, *hittable, 0.0, num::Float::max_value());
-                let nn = unit_hit.n.normalize();
+                    hittable.trace_ray(&mut unit_ray_from_p, 0.0, num::Float::max_value());
+                let unit_normal = unit_hit.n.normalize();
 
-                let ray_color = rgb8_from_vec3([nn.x, nn.y, nn.z]);
+                let ray_color = rgb8_from_vec3([unit_normal.x, unit_normal.y, unit_normal.z]);
 
                 pixel_color = plus_rgb8(pixel_color, ray_color);
 
@@ -229,14 +230,16 @@ impl Layer {
     }
 }
 
-impl Hittable for Layer {
+impl Hittable for Sphere {
     // add code here
     fn trace_ray(
+        &self,
         ray: &Ray,
-        sphere: Sphere,
         tmin: f32,
         tmax: f32,
     ) -> (f32, Intersection) {
+        let sphere = *self;
+
         let oc = ray.origin - sphere.center.xyz();
 
         let a = dot(&ray.direction, &ray.direction);
@@ -253,7 +256,7 @@ impl Hittable for Layer {
             let mut root = (-half_b - num::Float::sqrt(discriminant)) / a;
 
             if root < tmax && root > tmin {
-                let hit = Self::get_ray_hit(ray, sphere, root);
+                let hit = self.get_ray_hit(ray, root);
                 return (root, hit);
             }
 
@@ -261,22 +264,23 @@ impl Hittable for Layer {
             root = (-half_b + num::Float::sqrt(discriminant)) / a;
 
             if root < tmax && root > tmin {
-                let hit = Self::get_ray_hit(ray, sphere, root);
+                let hit = self.get_ray_hit(ray, root);
                 return (root, hit);
             }
         }
 
-        let hit = Self::get_ray_hit(ray, sphere, -1.0);
+        let hit = self.get_ray_hit(ray, -1.0);
         return (-1.0, hit);
     }
 
     fn get_ray_hit(
+        &self,
         ray: &Ray,
-        sphere: Sphere,
         t: f32,
     ) -> Intersection {
+        let sphere = *self;
         // p = ray.at(t)
-        let p = Self::ray_point_at_t(ray, t);
+        let p = ray.origin + ray.direction * t;
 
         // normal = P -c
         // https://raytracing.github.io/images/fig-1.05-sphere-normal.jpg

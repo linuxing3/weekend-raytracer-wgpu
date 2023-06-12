@@ -993,14 +993,14 @@ impl Intersection {
 
 pub trait Hittable {
     fn trace_ray(
+        &self,
         ray: &Ray,
-        sphere: Sphere,
         tmin: f32,
         tmax: f32,
     ) -> (f32, Intersection);
     fn get_ray_hit(
+        &self,
         ray: &Ray,
-        sphere: Sphere,
         t: f32,
     ) -> Intersection;
 }
