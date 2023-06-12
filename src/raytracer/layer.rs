@@ -1,18 +1,15 @@
-use std::{
-    f32::consts::{FRAC_1_PI, PI},
-    ptr::null_mut,
-};
+use std::f32::consts::{FRAC_1_PI, PI};
 
-use super::{texture::*, Angle, Intersection, Ray, Sphere};
+use super::{math::*, texture::*, Intersection, Ray, Sphere};
 use image::{DynamicImage, ImageBuffer, Rgb};
 use imgui::TextureId;
 use nalgebra_glm::{acos, atan2, dot, Vec3};
 
 pub struct Layer<'a> {
     texture_id: imgui::TextureId,
-    pub size: [f32; 2],
-    pub title: &'a str,
-    pub file_path: &'a str,
+    pub vp_size: [f32; 2],
+    pub w_title: &'a str,
+    pub f_path: &'a str,
     imgbuf: *mut XImageBuffer,
     pub camera: ImguiCamera,
     world: Vec<Sphere>,
@@ -33,19 +30,17 @@ impl<'a> Layer<'a> {
         let imgbuf = Box::into_raw(Box::new(new_buffer));
 
         let sphere1 = Sphere::new(glm::vec3(0.0, 0.0, -1.0), 0.5, 1);
-        let sphere2 = Sphere::new(glm::vec3(0.0, -0.5, -1.0), 10.0, 1);
+        let sphere2 = Sphere::new(glm::vec3(0.0, -100.5, -1.0), 10.0, 1);
 
         let world = vec![sphere1, sphere2];
-        // BUG:
-        // let imgbuf = &mut new_buffer as *mut XImageBuffer;
 
         let texture_id = TextureId::new(0);
 
         Self {
             texture_id,
-            size,
-            title,
-            file_path,
+            vp_size: size,
+            w_title: title,
+            f_path: file_path,
             imgbuf,
             camera,
             world,
@@ -58,9 +53,9 @@ impl<'a> Layer<'a> {
         queue: &wgpu::Queue,
         renderer: &mut imgui_wgpu::Renderer,
     ) -> Option<TextureId> {
-        let [width, height] = self.size;
+        let [width, height] = self.vp_size;
 
-        let imgbuf = self.img_buf().unwrap();
+        let imgbuf = self.imgbuf().unwrap();
 
         let img = DynamicImage::from(imgbuf);
 
@@ -84,7 +79,7 @@ impl<'a> Layer<'a> {
         &self.texture_id
     }
 
-    pub fn img_buf(&mut self) -> Option<XImageBuffer> {
+    pub fn imgbuf(&mut self) -> Option<XImageBuffer> {
         let imgbuf_boxed = unsafe { Box::from_raw(self.imgbuf) };
 
         Some(*imgbuf_boxed)
@@ -94,12 +89,12 @@ impl<'a> Layer<'a> {
         &mut self,
         ui: &mut imgui::Ui,
     ) {
-        let window = ui.window(self.title);
+        let window = ui.window(self.w_title);
 
         let mut new_imgui_region_size = None;
 
         window
-            .size(self.size, imgui::Condition::FirstUseEver)
+            .size(self.vp_size, imgui::Condition::FirstUseEver)
             .build(|| {
                 ui.separator();
 
@@ -123,20 +118,20 @@ impl<'a> Layer<'a> {
         &mut self,
         new_size: [f32; 2],
     ) {
-        if self.size != new_size {
-            self.size = new_size;
+        if self.vp_size != new_size {
+            self.vp_size = new_size;
         }
 
-        let [width, height] = self.size;
+        let [width, height] = self.vp_size;
 
-        let mut new_imgbuf = ImageBuffer::new(width as u32, height as u32);
+        let new_imgbuf = ImageBuffer::new(width as u32, height as u32);
         self.imgbuf = Box::into_raw(Box::new(new_imgbuf));
 
         self.set_data();
     }
 
     pub fn set_data(&mut self) {
-        let [width, height] = self.size;
+        let [width, height] = self.vp_size;
         unsafe {
             // A redundant loop to demonstrate reading image data
             for y in 0..height as u32 {
@@ -160,29 +155,35 @@ impl<'a> Layer<'a> {
     ) -> Rgb<u8> {
         let (u, v) = ((x + 1.0) / 2.0, (y + 1.0) / 2.0);
 
-        let mut ray = self.camera.get_ray(u, v);
-
-        // make sphere
-
+        // pixel color for multisampling
         for sphere in &self.world {
-            // t
-            let root = Self::ray_intersect_sphere(&mut ray, *sphere, 0.0, num::Float::max_value());
+            let mut _pixel_color = Rgb([0_u8, 0_u8, 0_u8]);
+            // multisampling
+            for _s in 0..50 {
+                // FIXME: include random (-1.0 - 1.0)
+                let su = u + 0.010;
+                let sv = v + 0.010;
+                let mut ray = self.camera.get_ray(su, sv);
+                let root = Self::trace_ray(&mut ray, *sphere, 0.0, num::Float::max_value());
 
-            let hit = Self::sphere_intersection(&mut ray, *sphere, root);
+                let hit = Self::get_ray_hit(&mut ray, *sphere, root);
 
-            let nn = hit.n.normalize();
+                let nn = hit.n.normalize();
 
-            let hit_color = Rgb([color_format(nn.x), color_format(nn.y), color_format(nn.z)]);
+                let ray_color = rgb8_from_vec3([nn.x, nn.y, nn.z]);
 
-            let background_color = Rgb([color_format(x), color_format(y), 55.0 as u8]);
-            if hit.t >= 0.0 {
-                return hit_color;
-            } else {
-                return background_color;
+                _pixel_color = add_rgb8(_pixel_color, ray_color);
+
+                let background_color = rgb8_from_vec3([x, y, 50.0]);
+                if hit.t >= 0.0 {
+                    return _pixel_color;
+                } else {
+                    return background_color;
+                }
             }
         }
 
-        Rgb([color_format(0.0), color_format(0.0), color_format(0.0)])
+        rgb8_from_vec3([0.0, 0.0, 0.0])
     }
 
     pub fn set_pixel_with_art_style(
@@ -243,7 +244,7 @@ impl<'a> Layer<'a> {
         return (-b - num::Float::sqrt(discriminant)) / a;
     }
 
-    pub fn ray_intersect_sphere(
+    pub fn trace_ray(
         ray: &Ray,
         sphere: Sphere,
         tmin: f32,
@@ -278,7 +279,7 @@ impl<'a> Layer<'a> {
         return -1.0;
     }
 
-    pub fn sphere_intersection(
+    pub fn get_ray_hit(
         ray: &Ray,
         sphere: Sphere,
         t: f32,
@@ -342,7 +343,7 @@ impl Default for ImguiCamera {
 
         let focal_length = 1.0;
 
-        let origin = glm::vec3(0.0, 0.0, 2.0);
+        let origin = glm::vec3(0.0, 0.0, 0.0);
 
         let horizontal = glm::vec3(viewport_width, 0.0, 0.0);
 
@@ -360,15 +361,4 @@ impl Default for ImguiCamera {
     }
 
     // add code here
-}
-
-pub fn coord_to_color(
-    x: u32,
-    y: f32,
-) -> f32 {
-    (x as f32 / y as f32) * 2.0 - 1.0
-}
-
-pub fn color_format(x: f32) -> u8 {
-    (x * 255.0) as u8
 }

@@ -169,10 +169,10 @@ fn main() {
                                 .surface
                                 .configure(&context.device, &context.surface_config);
 
-                            // layer.resize([
-                            //     new_inner_size.width as f32,
-                            //     new_inner_size.height as f32,
-                            // ]);
+                            layer.resize([
+                                new_inner_size.width as f32,
+                                new_inner_size.height as f32,
+                            ]);
                         }
                     }
 
