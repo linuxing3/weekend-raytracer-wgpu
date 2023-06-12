@@ -163,7 +163,7 @@ impl<'a> Layer<'a> {
                 // FIXME: include random (-1.0 - 1.0)
                 let su = u + 0.010;
                 let sv = v + 0.010;
-                let mut ray = self.camera.get_ray(su, sv);
+                let mut ray = self.camera.make_ray(su, sv);
                 let root = Self::trace_ray(&mut ray, *sphere, 0.0, num::Float::max_value());
 
                 let hit = Self::get_ray_hit(&mut ray, *sphere, root);
@@ -180,6 +180,37 @@ impl<'a> Layer<'a> {
                 } else {
                     return background_color;
                 }
+            }
+        }
+
+        // when world is empty
+        rgb8_from_vec3([0.0, 0.0, 0.0])
+    }
+
+    // NOTE:
+    pub fn per_pixel_no_multisampling(
+        &mut self,
+        x: f32,
+        y: f32,
+    ) -> Rgb<u8> {
+        let (u, v) = ((x + 1.0) / 2.0, (y + 1.0) / 2.0);
+
+        let mut ray = self.camera.make_ray(u, v);
+        // pixel color for multisampling
+        for sphere in &self.world {
+            let root = Self::trace_ray(&mut ray, *sphere, 0.0, num::Float::max_value());
+
+            let hit = Self::get_ray_hit(&mut ray, *sphere, root);
+
+            let nn = hit.n.normalize();
+
+            let ray_color = rgb8_from_vec3([nn.x, nn.y, nn.z]);
+
+            let background_color = rgb8_from_vec3([x, y, 50.0]);
+            if hit.t >= 0.0 {
+                return ray_color;
+            } else {
+                return background_color;
             }
         }
 
@@ -209,7 +240,7 @@ impl<'a> Layer<'a> {
             i += 1;
         }
 
-        image::Rgb([i as u8, i as u8, i as u8])
+        Rgb([i as u8, i as u8, i as u8])
     }
 
     pub fn new_from_image_buffer(
@@ -250,7 +281,7 @@ impl<'a> Layer<'a> {
         sphere: Sphere,
         tmin: f32,
         tmax: f32,
-    ) -> f32 {
+    ) -> (f32, Intersection) {
         let oc = ray.origin - sphere.center.xyz();
 
         let a = dot(&ray.direction, &ray.direction);
@@ -266,18 +297,21 @@ impl<'a> Layer<'a> {
             let mut root = (-half_b - num::Float::sqrt(discriminant)) / a;
 
             if root < tmax && root > tmin {
-                return root;
+                let hit = Self::get_ray_hit(ray, sphere, root);
+                return (root, hit);
             }
 
             // farest T
             root = (-half_b + num::Float::sqrt(discriminant)) / a;
 
             if root < tmax && root > tmin {
-                return root;
+                let hit = Self::get_ray_hit(ray, sphere, root);
+                return (root, hit);
             }
         }
 
-        return -1.0;
+        let hit = Self::get_ray_hit(ray, sphere, -1.0);
+        return (-1.0, hit);
     }
 
     pub fn get_ray_hit(
@@ -322,7 +356,7 @@ pub struct ImguiCamera {
 }
 
 impl ImguiCamera {
-    pub fn get_ray(
+    pub fn make_ray(
         &mut self,
         u: f32,
         v: f32,
