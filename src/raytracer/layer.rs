@@ -1,27 +1,30 @@
 use std::f32::consts::{FRAC_1_PI, PI};
 
-use super::{math::*, texture::*, Intersection, Ray, Sphere};
+use crate::fly_camera::FlyCameraController;
+
+use super::{
+    math::*, texture::*, GpuCamera, Intersection, Ray, RenderParams, RenderParamsValidationError,
+    Sphere,
+};
 use image::{DynamicImage, ImageBuffer, Rgb};
 use imgui::TextureId;
 use nalgebra_glm::{acos, atan2, dot, Vec3};
 
-pub struct Layer<'a> {
+pub struct Layer {
     texture_id: imgui::TextureId,
     pub vp_size: [f32; 2],
-    pub w_title: &'a str,
-    pub f_path: &'a str,
     imgbuf: *mut XImageBuffer,
-    pub camera: ImguiCamera,
+    pub camera: GpuCamera,
     world: Vec<Sphere>,
 }
 
-impl<'a> Layer<'a> {
+impl Layer {
     pub fn new(
         size: [f32; 2],
-        title: &'a str,
-        file_path: &'a str,
+        render_params: &RenderParams,
     ) -> Self {
-        let camera = ImguiCamera::default();
+        // Note: GpuCamera works in Imgui viewport
+        let camera = GpuCamera::new(&render_params.camera, (size[0] as u32, size[1] as u32));
 
         let [width, height] = size;
 
@@ -29,17 +32,15 @@ impl<'a> Layer<'a> {
 
         let imgbuf = Box::into_raw(Box::new(new_buffer));
 
-        let sphere1 = Sphere::new(glm::vec3(0.0, 0.0, -1.0), 0.5, 1);
-        let sphere2 = Sphere::new(glm::vec3(0.0, -100.5, -1.0), 10.0, 1);
-        let world = vec![sphere1, sphere2];
+        let sphere1 = Sphere::new(glm::vec3(-3.0, -3.0, -1.0), 2.0, 1);
+        // let sphere2 = Sphere::new(glm::vec3(-3.0, -5.0, -1.0), 5.0, 1);
+        let world = vec![sphere1];
 
         let texture_id = TextureId::new(0);
 
         Self {
             texture_id,
             vp_size: size,
-            w_title: title,
-            f_path: file_path,
             imgbuf,
             camera,
             world,
@@ -87,49 +88,48 @@ impl<'a> Layer<'a> {
     pub fn render(
         &mut self,
         ui: &mut imgui::Ui,
+        render_params: &RenderParams,
     ) {
-        let window = ui.window(self.w_title);
+        let title = format!("Texture {}", self.texture_id().id());
+        let window = ui.window(title);
 
         let mut new_imgui_region_size = None;
+        // Note: GpuCamera works in Imgui viewport
+        self.camera = GpuCamera::new(&render_params.camera, render_params.viewport_size);
 
         window
             .size(self.vp_size, imgui::Condition::FirstUseEver)
             .build(|| {
-                ui.separator();
-
-                ui.text("Imgui Camera parameters");
-
-                ui.slider("origin x", 0.0, 10.0, &mut self.camera.origin.x);
-
-                ui.slider("origin y", 0.0, 10.0, &mut self.camera.origin.y);
-
-                ui.slider("origin.z", -10.0, 10.0, &mut self.camera.origin.z);
-
-                ui.separator();
-
                 new_imgui_region_size = Some(ui.content_region_avail());
-
+                for c in &mut self.camera.eye {
+                    if ui.slider("eye", -10.0, 10.0, c) {};
+                }
                 imgui::Image::new(self.texture_id, new_imgui_region_size.unwrap()).build(ui);
             });
     }
 
     pub fn resize(
         &mut self,
-        new_size: [f32; 2],
+        render_params: &RenderParams,
     ) {
-        if self.vp_size != new_size {
-            self.vp_size = new_size;
-        }
+        let (v_width, v_height) = render_params.viewport_size;
+        if self.vp_size[0] != v_width as f32 || self.vp_size[1] != v_height as f32 {
+            self.vp_size[0] = v_width as f32;
+            self.vp_size[1] = v_height as f32;
+            // Note: GpuCamera works in Imgui viewport
+            let camera = GpuCamera::new(&render_params.camera, render_params.viewport_size);
+            self.camera = camera;
 
-        let [width, height] = self.vp_size;
-
-        let new_imgbuf = ImageBuffer::new(width as u32, height as u32);
-        self.imgbuf = Box::into_raw(Box::new(new_imgbuf));
-
-        self.set_data();
+            let new_imgbuf = ImageBuffer::new(v_width, v_height);
+            self.imgbuf = Box::into_raw(Box::new(new_imgbuf));
+        };
     }
 
-    pub fn set_data(&mut self) {
+    pub fn set_data(
+        &mut self,
+        render_params: &RenderParams,
+    ) {
+        // self.camera = GpuCamera::new(&render_params.camera, render_params.viewport_size);
         let [width, height] = self.vp_size;
         unsafe {
             // A redundant loop to demonstrate reading image data
@@ -153,20 +153,19 @@ impl<'a> Layer<'a> {
         x: f32,
         y: f32,
     ) -> Rgb<u8> {
-        let (u, v) = ((x + 1.0) / 2.0, (y + 1.0) / 2.0);
+        let (u, v) = (x, y);
 
         // pixel color for multisampling
         for sphere in &self.world {
             let mut pixel_color = Rgb([0_u8, 0_u8, 0_u8]);
             // multisampling
             for _s in 0..100 {
-                // FIXME: include random (-1.0 - 1.0)
                 let su = u + 0.010;
                 let sv = v + 0.010;
-                let mut ray = self.camera.make_ray(su, sv);
-                let root = Self::trace_ray(&mut ray, *sphere, 0.0, num::Float::max_value());
 
-                let hit = Self::get_ray_hit(&mut ray, *sphere, root);
+                // FIXME: include random (-1.0 - 1.0)
+                let mut ray = self.camera.make_ray(su, sv);
+                let (_root, hit) = Self::trace_ray(&mut ray, *sphere, 0.0, num::Float::max_value());
 
                 let nn = hit.n.normalize();
 
@@ -198,9 +197,7 @@ impl<'a> Layer<'a> {
         let mut ray = self.camera.make_ray(u, v);
         // pixel color for multisampling
         for sphere in &self.world {
-            let root = Self::trace_ray(&mut ray, *sphere, 0.0, num::Float::max_value());
-
-            let hit = Self::get_ray_hit(&mut ray, *sphere, root);
+            let (_root, hit) = Self::trace_ray(&mut ray, *sphere, 0.0, num::Float::max_value());
 
             let nn = hit.n.normalize();
 
@@ -345,53 +342,5 @@ impl<'a> Layer<'a> {
         t: f32,
     ) -> Vec3 {
         return ray.origin + t * ray.direction;
-    }
-}
-
-pub struct ImguiCamera {
-    lower_left_color: Vec3,
-    origin: Vec3,
-    vertical: Vec3,
-    horizontal: Vec3,
-}
-
-impl ImguiCamera {
-    pub fn make_ray(
-        &mut self,
-        u: f32,
-        v: f32,
-    ) -> Ray {
-        Ray::new(
-            self.origin,
-            self.lower_left_color + u * self.horizontal + v * self.vertical - self.origin,
-        )
-    }
-}
-
-impl Default for ImguiCamera {
-    fn default() -> Self {
-        let aspect_ratio = 16.0 / 9.0 as f32;
-
-        let viewport_height = 2.0;
-
-        let viewport_width = aspect_ratio * viewport_height;
-
-        let focal_length = 1.0;
-
-        let origin = glm::vec3(0.0, 0.0, 0.0);
-
-        let horizontal = glm::vec3(viewport_width, 0.0, 0.0);
-
-        let vertical = glm::vec3(0.0, viewport_height, 0.0);
-
-        let lower_left_color =
-            origin - horizontal / 2.0 - vertical / 2.0 - glm::vec3(0.0, 0.0, focal_length);
-
-        Self {
-            origin,
-            vertical,
-            horizontal,
-            lower_left_color,
-        }
     }
 }

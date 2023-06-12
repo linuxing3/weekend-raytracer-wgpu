@@ -5,23 +5,20 @@
     nonstandard_style
 )]
 
+mod fly_camera;
+mod raytracer;
 pub extern crate nalgebra_glm as glm;
 
 use fly_camera::FlyCameraController;
 use raytracer::{
     Layer, Material, Raytracer, RenderParams, SamplingParams, Scene, SkyParams, Sphere, Texture,
 };
-use std::{borrow::BorrowMut, collections::VecDeque, time::Instant};
+use std::{collections::VecDeque, time::Instant};
 use winit::{
     event::{Event, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
     window::{Window, WindowBuilder},
 };
-
-use image::{DynamicImage, GenericImageView};
-
-mod fly_camera;
-mod raytracer;
 
 fn main() {
     let event_loop = EventLoop::new();
@@ -118,11 +115,13 @@ fn main() {
     let mut fps_counter = FpsCounter::new();
 
     // HACK: imgui layers
-    let path = "assets/fractal.jpeg";
 
-    let mut layer = Layer::new([600.0, 400.0], "Tracer", path);
+    let mut layer = Layer::new(
+        [viewport_size.0 as f32, viewport_size.1 as f32],
+        &render_params,
+    );
 
-    layer.set_data();
+    layer.set_data(&render_params);
 
     layer.register_texture(&context.device, &context.queue, &mut imgui_renderer);
 
@@ -150,9 +149,6 @@ fn main() {
                             context
                                 .surface
                                 .configure(&context.device, &context.surface_config);
-
-                            // layer.resize([physical_size.width as f32,
-                            // physical_size.height as f32]);
                         }
                     }
 
@@ -168,11 +164,6 @@ fn main() {
                             context
                                 .surface
                                 .configure(&context.device, &context.surface_config);
-
-                            layer.resize([
-                                new_inner_size.width as f32,
-                                new_inner_size.height as f32,
-                            ]);
                         }
                     }
 
@@ -204,10 +195,7 @@ fn main() {
 
                     // HACK:
                     {
-                        // for _layer in &mut layer_stack {
-                        //
-                        layer.render(ui);
-                        // }
+                        layer.render(ui, &render_params);
                     }
 
                     {

@@ -707,6 +707,16 @@ impl GpuCamera {
             _padding5: 0_f32,
         }
     }
+    pub fn make_ray(
+        &mut self,
+        u: f32,
+        v: f32,
+    ) -> Ray {
+        Ray::new(
+            self.eye,
+            self.lower_left_corner + u * self.horizontal + v * self.vertical - self.eye,
+        )
+    }
 }
 
 #[repr(C)]
