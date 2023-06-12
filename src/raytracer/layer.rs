@@ -15,6 +15,7 @@ pub struct Layer<'a> {
     pub file_path: &'a str,
     imgbuf: *mut XImageBuffer,
     pub camera: ImguiCamera,
+    world: Vec<Sphere>,
 }
 
 impl<'a> Layer<'a> {
@@ -27,10 +28,14 @@ impl<'a> Layer<'a> {
 
         let [width, height] = size;
 
-        let mut new_buffer: XImageBuffer = ImageBuffer::new(width as u32, height as u32);
+        let new_buffer: XImageBuffer = ImageBuffer::new(width as u32, height as u32);
 
         let imgbuf = Box::into_raw(Box::new(new_buffer));
 
+        let sphere1 = Sphere::new(glm::vec3(0.0, 0.0, -1.0), 0.5, 1);
+        let sphere2 = Sphere::new(glm::vec3(0.0, -0.5, -1.0), 10.0, 1);
+
+        let world = vec![sphere1, sphere2];
         // BUG:
         // let imgbuf = &mut new_buffer as *mut XImageBuffer;
 
@@ -43,6 +48,7 @@ impl<'a> Layer<'a> {
             file_path,
             imgbuf,
             camera,
+            world,
         }
     }
 
@@ -121,26 +127,12 @@ impl<'a> Layer<'a> {
             self.size = new_size;
         }
 
-        self.imgbuf = null_mut();
-
-        let [width, height] = new_size;
+        let [width, height] = self.size;
 
         let mut new_imgbuf = ImageBuffer::new(width as u32, height as u32);
-
-        // A redundant loop to demonstrate reading image data
-        for y in 0..height as u32 {
-            for x in 0..width as u32 {
-                let pixel = new_imgbuf.get_pixel_mut(x, y);
-
-                let u = (x as f32 / width) * 2.0 - 1.0;
-
-                let v = (y as f32 / height) * 2.0 - 1.0;
-
-                *pixel = self.per_pixel(u, v);
-            }
-        }
-
         self.imgbuf = Box::into_raw(Box::new(new_imgbuf));
+
+        self.set_data();
     }
 
     pub fn set_data(&mut self) {
@@ -151,9 +143,9 @@ impl<'a> Layer<'a> {
                 for x in 0..width as u32 {
                     let pixel = (*self.imgbuf).get_pixel_mut(x, y);
 
-                    let u = (x as f32 / width) * 2.0 - 1.0;
+                    let u = coord_to_color(x, width);
 
-                    let v = (y as f32 / height) * 2.0 - 1.0;
+                    let v = coord_to_color(y, height);
 
                     *pixel = self.per_pixel(u, v);
                 }
@@ -166,36 +158,31 @@ impl<'a> Layer<'a> {
         x: f32,
         y: f32,
     ) -> Rgb<u8> {
-        let (u, v) = (x, y);
+        let (u, v) = ((x + 1.0) / 2.0, (y + 1.0) / 2.0);
 
         let mut ray = self.camera.get_ray(u, v);
 
         // make sphere
-        let radius = 0.8_f32;
 
-        let sphere = Sphere::new(glm::vec3(0.0, 0.0, -1.0), radius, 1);
+        for sphere in &self.world {
+            // t
+            let root = Self::ray_intersect_sphere(&mut ray, *sphere, 0.0, num::Float::max_value());
 
-        // t
-        let root = Self::ray_intersect_sphere(&mut ray, sphere, 0.0, num::Float::max_value());
+            let hit = Self::sphere_intersection(&mut ray, *sphere, root);
 
-        let hit = Self::sphere_intersection(&mut ray, sphere, root);
+            let nn = hit.n.normalize();
 
-        let nn = hit.n.normalize();
+            let hit_color = Rgb([color_format(nn.x), color_format(nn.y), color_format(nn.z)]);
 
-        let [r, g, b]: [u8; 3] = [
-            ((nn.x) * 255.0) as u8,
-            ((nn.y) * 255.0) as u8,
-            ((nn.z) * 255.0) as u8,
-        ];
-
-        let hit_color = Rgb([r, g, b]);
-
-        let background_color = Rgb([(x * 255.0) as u8, (y * 255.0) as u8, 55.0 as u8]);
-
-        match hit.t >= 0.0 {
-            true => hit_color,
-            false => background_color,
+            let background_color = Rgb([color_format(x), color_format(y), 55.0 as u8]);
+            if hit.t >= 0.0 {
+                return hit_color;
+            } else {
+                return background_color;
+            }
         }
+
+        Rgb([color_format(0.0), color_format(0.0), color_format(0.0)])
     }
 
     pub fn set_pixel_with_art_style(
@@ -326,7 +313,6 @@ impl<'a> Layer<'a> {
 }
 
 pub struct ImguiCamera {
-    aspect_ratio: f32,
     lower_left_color: Vec3,
     origin: Vec3,
     vertical: Vec3,
@@ -356,7 +342,7 @@ impl Default for ImguiCamera {
 
         let focal_length = 1.0;
 
-        let origin = glm::vec3(0.0, 0.0, 0.0);
+        let origin = glm::vec3(0.0, 0.0, 2.0);
 
         let horizontal = glm::vec3(viewport_width, 0.0, 0.0);
 
@@ -367,7 +353,6 @@ impl Default for ImguiCamera {
 
         Self {
             origin,
-            aspect_ratio,
             vertical,
             horizontal,
             lower_left_color,
@@ -375,4 +360,15 @@ impl Default for ImguiCamera {
     }
 
     // add code here
+}
+
+pub fn coord_to_color(
+    x: u32,
+    y: f32,
+) -> f32 {
+    (x as f32 / y as f32) * 2.0 - 1.0
+}
+
+pub fn color_format(x: f32) -> u8 {
+    (x * 255.0) as u8
 }
