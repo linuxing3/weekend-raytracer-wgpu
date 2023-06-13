@@ -188,6 +188,17 @@ fn main() {
                     last_time = now;
                 }
 
+                render_params.camera = fly_camera_controller.renderer_camera();
+
+                match raytracer.set_render_params(&context.queue, &render_params) {
+                    Err(e) => {
+                        eprintln!("Error setting render params: {e}")
+                    }
+                    _ => {
+                        layer.update_camera(&render_params);
+                    }
+                }
+
                 {
                     imgui_platform
                         .prepare_frame(imgui.io_mut(), &window)
@@ -333,17 +344,6 @@ fn main() {
                         last_cursor = Some(ui.mouse_cursor());
 
                         imgui_platform.prepare_render(&ui, &window);
-                    }
-                }
-
-                render_params.camera = fly_camera_controller.renderer_camera();
-
-                match raytracer.set_render_params(&context.queue, &render_params) {
-                    Err(e) => {
-                        eprintln!("Error setting render params: {e}")
-                    }
-                    _ => {
-                        layer.update_camera(&render_params);
                     }
                 }
 
