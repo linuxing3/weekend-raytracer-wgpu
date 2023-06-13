@@ -152,8 +152,6 @@ impl Layer {
         y: f32,
         render_params: &RenderParams,
     ) -> Rgb<u8> {
-        let (u, v) = (x, y);
-
         // hittable world
         for hittable in &self.world {
             let mut pixel_color = Rgb([0_u8, 0_u8, 0_u8]);
@@ -161,35 +159,14 @@ impl Layer {
             // https://raytracing.github.io/images/fig-1.07-pixel-samples.jpg
             let sampleing_nums = render_params.sampling.num_samples_per_pixel;
             for _s in 0..sampleing_nums {
-                let su = u + random_double();
-                let sv = v + random_double();
-
+                let (u, v) = (x + random_double(), y + random_double());
                 // NOTE: make ray from camera eye to sphere
                 // https://raytracing.github.io/images/fig-1.04-ray-sphere.jpg
-                let mut ray_from_camera = self.camera.make_ray(su, sv);
-                let (_camera_root, camera_hit) =
-                    hittable.trace_ray(&mut ray_from_camera, 0.0, num::Float::max_value());
+                let ray_from_camera = self.camera.make_ray(u, v);
 
-                // NOTE: difussion
-                // https://raytracing.github.io/images/fig-1.09-rand-vec.jpg
-                let target = camera_hit.p + camera_hit.n + random_in_unit_sphere();
-                let mut unit_ray_from_p = Ray::new(camera_hit.p, target - camera_hit.p);
-                // NOTE: make ray from camera-sphere hitting point
-                // to some random point in the unit_normal_sphere
-                let (_unit_root, unit_hit) =
-                    hittable.trace_ray(&mut unit_ray_from_p, 0.0, num::Float::max_value());
-                let unit_normal = unit_hit.n.normalize();
-
-                let ray_color = rgb8_from_vec3([unit_normal.x, unit_normal.y, unit_normal.z]);
-
-                pixel_color = plus_rgb8(pixel_color, ray_color);
-
-                if camera_hit.t >= 0.0 {
-                    return pixel_color;
-                } else {
-                    let background_color = rgb8_from_vec3([x, y, 50.0]);
-                    return background_color;
-                }
+                let traced_color = ray_color(&ray_from_camera, hittable, 50);
+                pixel_color = plus_rgb8(pixel_color, traced_color);
+                return pixel_color;
             }
         }
 
@@ -307,4 +284,58 @@ impl Hittable for Sphere {
 
         return Intersection { p, n, u, v, t, f };
     }
+}
+
+fn ray_color(
+    mut ray: &Ray,
+    world: &impl Hittable,
+    depth: u8,
+) -> Rgb<u8> {
+    let (_camera_root, camera_hit) = world.trace_ray(&ray, 0.0, num::Float::max_value());
+
+    // NOTE: difussion
+    // https://raytracing.github.io/images/fig-1.09-rand-vec.jpg
+    let target = camera_hit.p + camera_hit.n + random_in_unit_sphere();
+    let mut unit_ray_from_p = Ray::new(camera_hit.p, target - camera_hit.p);
+
+    // NOTE:
+    // make ray from camera-sphere hitting point
+    // to some random point in the unit_normal_sphere
+    let (_unit_root, unit_hit) =
+        world.trace_ray(&mut unit_ray_from_p, 0.0, num::Float::max_value());
+    let unit_normal = unit_hit.n.normalize();
+
+    let ray_color = rgb8_from_vec3([
+        0.5 * (unit_normal.x + 1.0),
+        0.5 * (unit_normal.y + 1.0),
+        0.5 * (unit_normal.z + 1.0),
+    ]);
+    let background_color = rgb8_from_vec3([
+        unit_normal.x * 0.5,
+        unit_normal.y * 0.5,
+        unit_normal.z * 0.5,
+    ]);
+    if camera_hit.t >= 0.0 {
+        return ray_color;
+    } else {
+        return background_color;
+    }
+}
+
+fn ray_color_recursive(
+    ray: &Ray,
+    world: &impl Hittable,
+    depth: u8,
+) -> Rgb<u8> {
+    let (root, hit) = world.trace_ray(ray, 0.0, num::Float::max_value());
+    let background_color = rgb8_from_vec3([123.0, 134.0, 123.0]);
+    if depth <= 0 {
+        return background_color;
+    };
+    if root >= 0.0 {
+        let target = hit.p + hit.n + random_in_unit_sphere();
+        let unit_ray_from_p = Ray::new(hit.p, target - hit.p);
+        return ray_color(&unit_ray_from_p, world, depth - 1);
+    }
+    return background_color;
 }

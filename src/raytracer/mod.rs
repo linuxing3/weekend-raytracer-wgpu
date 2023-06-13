@@ -974,6 +974,16 @@ pub struct Intersection {
 }
 
 impl Intersection {
+    pub fn new() -> Self {
+        let p: Vec3 = glm::vec3(0.0, 0.0, 0.0);
+        let n: Vec3 = glm::vec3(0.0, 0.0, 0.0);
+        let u: f32 = 0.0;
+        let v: f32 = 0.0;
+        let t: f32 = 0.0;
+        let f: bool = false;
+        Self { p, n, u, v, t, f }
+    }
+
     pub fn set_face_normal(
         &mut self,
         ray: &Ray,
