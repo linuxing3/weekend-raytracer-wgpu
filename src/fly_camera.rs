@@ -3,27 +3,26 @@ use winit::event::{ElementState, KeyboardInput, MouseButton, VirtualKeyCode, Win
 use crate::raytracer::{Angle, Camera};
 
 pub struct FlyCameraController {
-    pub position : glm::Vec3,
-    pub yaw : Angle,
-    pub pitch : Angle,
-    pub vfov_degrees : f32,
-    pub aperture : f32,
-    pub focus_distance : f32,
+    pub position: glm::Vec3,
+    pub yaw: Angle,
+    pub pitch: Angle,
+    pub vfov_degrees: f32,
+    pub aperture: f32,
+    pub focus_distance: f32,
 
-    pub forward_pressed : bool,
-    pub backward_pressed : bool,
-    pub left_pressed : bool,
-    pub right_pressed : bool,
-    pub up_pressed : bool,
-    pub down_pressed : bool,
-    pub look_pressed : bool,
-    pub previous_mouse_pos : Option<(f32, f32)>,
-    pub mouse_pos : (f32, f32),
+    pub forward_pressed: bool,
+    pub backward_pressed: bool,
+    pub left_pressed: bool,
+    pub right_pressed: bool,
+    pub up_pressed: bool,
+    pub down_pressed: bool,
+    pub look_pressed: bool,
+    pub previous_mouse_pos: Option<(f32, f32)>,
+    pub mouse_pos: (f32, f32),
 }
 
 impl Default for FlyCameraController {
     fn default() -> Self {
-
         let look_from = glm::vec3(-10.0, 2.0, -4.0);
 
         let look_at = glm::vec3(0.0, 1.0, 0.0);
@@ -31,69 +30,43 @@ impl Default for FlyCameraController {
         let focus_distance = glm::magnitude(&(look_at - look_from));
 
         Self {
-            position : look_from,
-            yaw : Angle::degrees(25_f32),
-            pitch : Angle::degrees(-10_f32),
-            vfov_degrees : 30.0,
-            aperture : 0.8,
+            position: look_from,
+            yaw: Angle::degrees(25_f32),
+            pitch: Angle::degrees(-10_f32),
+            vfov_degrees: 30.0,
+            aperture: 0.8,
             focus_distance,
-            forward_pressed : false,
-            backward_pressed : false,
-            left_pressed : false,
-            right_pressed : false,
-            up_pressed : false,
-            down_pressed : false,
-            look_pressed : false,
-            previous_mouse_pos : None,
-            mouse_pos : (0.0, 0.0),
+            forward_pressed: false,
+            backward_pressed: false,
+            left_pressed: false,
+            right_pressed: false,
+            up_pressed: false,
+            down_pressed: false,
+            look_pressed: false,
+            previous_mouse_pos: None,
+            mouse_pos: (0.0, 0.0),
         }
     }
 }
 
 impl FlyCameraController {
-    pub fn for_imgui() -> Self {
-
-        let look_from = glm::vec3(0.0, 0.0, 0.0);
-
-        let look_at = glm::vec3(0.0, 0.0, -1.0);
-
-        let focus_distance = glm::magnitude(&(look_at - look_from));
-
-        Self {
-            position : look_from,
-            yaw : Angle::degrees(25_f32),
-            pitch : Angle::degrees(-10_f32),
-            vfov_degrees : 30.0,
-            aperture : 0.8,
-            focus_distance,
-            forward_pressed : false,
-            backward_pressed : false,
-            left_pressed : false,
-            right_pressed : false,
-            up_pressed : false,
-            down_pressed : false,
-            look_pressed : false,
-            previous_mouse_pos : None,
-            mouse_pos : (0.0, 0.0),
-        }
-    }
-
     pub fn renderer_camera(&self) -> Camera {
-
         let orientation = camera_orientation(self);
 
         Camera {
-            eye_pos : self.position,
-            eye_dir : orientation.forward,
-            up : orientation.up,
-            vfov : Angle::degrees(self.vfov_degrees),
-            aperture : self.aperture,
-            focus_distance : self.focus_distance,
+            eye_pos: self.position,
+            eye_dir: orientation.forward,
+            up: orientation.up,
+            vfov: Angle::degrees(self.vfov_degrees),
+            aperture: self.aperture,
+            focus_distance: self.focus_distance,
         }
     }
 
-    pub fn handle_event(&mut self, event : &WindowEvent<'_>) {
-
+    pub fn handle_event(
+        &mut self,
+        event: &WindowEvent<'_>,
+    ) {
         match event {
             WindowEvent::KeyboardInput {
                 input:
@@ -104,32 +77,25 @@ impl FlyCameraController {
                     },
                 ..
             } => {
-
                 let is_pressed = *state == ElementState::Pressed;
 
                 match keycode {
                     VirtualKeyCode::W => {
-
                         self.forward_pressed = is_pressed;
                     }
                     VirtualKeyCode::S => {
-
                         self.backward_pressed = is_pressed;
                     }
                     VirtualKeyCode::A => {
-
                         self.left_pressed = is_pressed;
                     }
                     VirtualKeyCode::D => {
-
                         self.right_pressed = is_pressed;
                     }
                     VirtualKeyCode::Q => {
-
                         self.down_pressed = is_pressed;
                     }
                     VirtualKeyCode::E => {
-
                         self.up_pressed = is_pressed;
                     }
                     _ => {}
@@ -137,30 +103,27 @@ impl FlyCameraController {
             }
 
             WindowEvent::CursorMoved { position, .. } => {
-
                 self.mouse_pos = (position.x as f32, position.y as f32);
             }
 
-            WindowEvent::MouseInput { button, state, .. } => {
-                match button {
-                    MouseButton::Right => {
-
-                        self.look_pressed = *state == ElementState::Pressed;
-                    }
-                    _ => {}
+            WindowEvent::MouseInput { button, state, .. } => match button {
+                MouseButton::Right => {
+                    self.look_pressed = *state == ElementState::Pressed;
                 }
-            }
+                _ => {}
+            },
 
             _ => {}
         }
     }
 
-    pub fn after_events(&mut self, viewport_size : (u32, u32), translation_scale : f32) {
-
+    pub fn after_events(
+        &mut self,
+        viewport_size: (u32, u32),
+        translation_scale: f32,
+    ) {
         if self.look_pressed {
-
             if let Some(prev_mouse_pos) = self.previous_mouse_pos {
-
                 let orientation = camera_orientation(self);
 
                 let c1 = orientation.right;
@@ -210,7 +173,6 @@ impl FlyCameraController {
         }
 
         {
-
             let v = |b| if b { 1_f32 } else { 0_f32 };
 
             let translation = glm::vec3(
@@ -231,11 +193,10 @@ impl FlyCameraController {
 }
 
 pub fn generate_camera_ray_dir(
-    camera : &FlyCameraController,
-    mouse_pos : (f32, f32),
-    viewport_size : (u32, u32),
+    camera: &FlyCameraController,
+    mouse_pos: (f32, f32),
+    viewport_size: (u32, u32),
 ) -> glm::Vec3 {
-
     let aspect_ratio = viewport_size.0 as f32 / viewport_size.1 as f32;
 
     let half_height =
@@ -258,13 +219,12 @@ pub fn generate_camera_ray_dir(
 }
 
 pub struct Orientation {
-    pub forward : glm::Vec3,
-    pub right : glm::Vec3,
-    pub up : glm::Vec3,
+    pub forward: glm::Vec3,
+    pub right: glm::Vec3,
+    pub up: glm::Vec3,
 }
 
-pub fn camera_orientation(camera : &FlyCameraController) -> Orientation {
-
+pub fn camera_orientation(camera: &FlyCameraController) -> Orientation {
     let forward = glm::normalize(&glm::vec3(
         camera.yaw.as_radians().cos() * camera.pitch.as_radians().cos(),
         camera.pitch.as_radians().sin(),

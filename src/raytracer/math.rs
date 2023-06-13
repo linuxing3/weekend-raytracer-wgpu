@@ -65,7 +65,7 @@ pub fn rgb8_from_vec3(color: [f32; 3]) -> Rgb<u8> {
 
     Rgb([r, g, b])
 }
-pub fn write_color(
+pub fn adjust_gamma_color(
     color: Vec3,
     n_samples: u32,
 ) -> Vec3 {

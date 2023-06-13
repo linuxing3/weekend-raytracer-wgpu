@@ -81,17 +81,41 @@ impl Layer {
         Some(*imgbuf_boxed)
     }
 
+    pub fn update_camera(
+        &mut self,
+        render_params: &RenderParams,
+    ) {
+        self.camera = GpuCamera::new(&render_params.camera, render_params.viewport_size);
+    }
+
+    pub fn render_draw_list(
+        &mut self,
+        ui: &mut imgui::Ui,
+        render_params: &RenderParams,
+    ) {
+        self.update_camera(render_params);
+
+        let title = format!("Texture {}", self.texture_id().id());
+        ui.invisible_button(title, ui.content_region_avail());
+
+        // Get draw list and draw image over invisible button
+        let draw_list = ui.get_window_draw_list();
+        draw_list
+            .add_image(self.texture_id, ui.item_rect_min(), ui.item_rect_max())
+            .build();
+    }
+
     pub fn render(
         &mut self,
         ui: &mut imgui::Ui,
         render_params: &RenderParams,
     ) {
+        self.update_camera(render_params);
+
         let title = format!("Texture {}", self.texture_id().id());
         let window = ui.window(title);
 
         let mut new_imgui_region_size = None;
-        // Note: GpuCamera works in Imgui viewport
-        self.camera = GpuCamera::new(&render_params.camera, render_params.viewport_size);
 
         window
             .size(self.vp_size, imgui::Condition::FirstUseEver)
@@ -108,15 +132,15 @@ impl Layer {
         &mut self,
         render_params: &RenderParams,
     ) {
-        let (v_width, v_height) = render_params.viewport_size;
-        if self.vp_size[0] != v_width as f32 || self.vp_size[1] != v_height as f32 {
-            self.vp_size[0] = v_width as f32;
-            self.vp_size[1] = v_height as f32;
+        let (width, height) = render_params.viewport_size;
+        if self.vp_size[0] != width as f32 || self.vp_size[1] != height as f32 {
+            self.vp_size[0] = width as f32;
+            self.vp_size[1] = height as f32;
             // Note: GpuCamera works in Imgui viewport
             let camera = GpuCamera::new(&render_params.camera, render_params.viewport_size);
             self.camera = camera;
 
-            let new_imgbuf = ImageBuffer::new(v_width, v_height);
+            let new_imgbuf = ImageBuffer::new(width, height);
             self.imgbuf = Box::into_raw(Box::new(new_imgbuf));
 
             self.set_data(render_params);
@@ -154,21 +178,19 @@ impl Layer {
     ) -> Rgb<u8> {
         // hittable world
         for hittable in &self.world {
-            let hit_anything = false;
-            let closest_so_far = std::f32::MAX;
             let mut pixel_color = Rgb([0_u8, 0_u8, 0_u8]);
             // NOTE:: multisampling
             // https://raytracing.github.io/images/fig-1.07-pixel-samples.jpg
             let n_samples = render_params.sampling.num_samples_per_pixel;
 
-            for _s in 0..n_samples {
+            for _s in 0..n_samples * 5 {
                 let (u, v) = (x + random_double(), y + random_double());
                 // NOTE: make ray from camera eye to sphere
                 // https://raytracing.github.io/images/fig-1.04-ray-sphere.jpg
                 let ray_from_camera = self.camera.make_ray(u, v);
 
                 let traced_color = ray_color_recursive(&ray_from_camera, hittable, 50);
-                pixel_color = vec3_to_rgb8(write_color(
+                pixel_color = vec3_to_rgb8(adjust_gamma_color(
                     rgb8_to_vec3(pixel_color) + rgb8_to_vec3(traced_color),
                     n_samples,
                 ));

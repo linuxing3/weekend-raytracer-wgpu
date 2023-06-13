@@ -106,8 +106,6 @@ fn main() {
         imgui_renderer_config,
     );
 
-    // layer.update(&fly_camera_controller);
-
     let mut last_cursor = None;
 
     let mut last_time = Instant::now();
@@ -199,7 +197,7 @@ fn main() {
 
                     // HACK:
                     {
-                        layer.render(ui, &render_params);
+                        layer.render_draw_list(ui, &render_params);
                     }
 
                     {
@@ -344,7 +342,9 @@ fn main() {
                     Err(e) => {
                         eprintln!("Error setting render params: {e}")
                     }
-                    _ => {}
+                    _ => {
+                        layer.update_camera(&render_params);
+                    }
                 }
 
                 window.request_redraw();
@@ -565,4 +565,38 @@ pub fn create_empty_texels(
             count
         })
         .collect()
+}
+
+pub fn render_view_in_imgui(
+    context: &GpuContext,
+    raytracer: &mut Raytracer,
+    view: wgpu::TextureView,
+) {
+    let mut encoder = context
+        .device
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+
+    {
+        let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: &view,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color {
+                        r: 0.012,
+                        g: 0.012,
+                        b: 0.012,
+                        a: 1.0,
+                    }),
+                    store: true,
+                },
+            })],
+            depth_stencil_attachment: None,
+            label: None,
+        });
+
+        raytracer.render_frame(&context.queue, &mut render_pass);
+    }
+
+    context.queue.submit(Some(encoder.finish()));
 }
