@@ -66,22 +66,12 @@ pub fn rgb8_from_vec3(color: [f32; 3]) -> Rgb<u8> {
     Rgb([r, g, b])
 }
 pub fn write_color(
-    color: Rgb<u8>,
+    color: Vec3,
     n_samples: u32,
-) -> Rgb<u8> {
-    let mut r = color[0];
-    let mut g = color[1];
-    let mut b = color[2];
-    let scale = (1 / n_samples) as u8;
-    r *= scale;
-    g *= scale;
-    b *= scale;
+) -> Vec3 {
+    let final_color = color / n_samples as f32;
 
-    let rr = (256.0 * clamp(r as f32, 0.0, 0.999)) as u8;
-    let gg = (256.0 * clamp(g as f32, 0.0, 0.999)) as u8;
-    let bb = (256.0 * clamp(b as f32, 0.0, 0.999)) as u8;
-
-    Rgb([rr, gg, bb])
+    final_color
 }
 
 pub fn clamp<T: std::cmp::PartialOrd>(

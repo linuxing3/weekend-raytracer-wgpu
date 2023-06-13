@@ -154,24 +154,30 @@ impl Layer {
     ) -> Rgb<u8> {
         // hittable world
         for hittable in &self.world {
+            let hit_anything = false;
+            let closest_so_far = std::f32::MAX;
             let mut pixel_color = Rgb([0_u8, 0_u8, 0_u8]);
             // NOTE:: multisampling
             // https://raytracing.github.io/images/fig-1.07-pixel-samples.jpg
-            let sampleing_nums = render_params.sampling.num_samples_per_pixel;
-            for _s in 0..sampleing_nums {
+            let n_samples = render_params.sampling.num_samples_per_pixel;
+
+            for _s in 0..n_samples {
                 let (u, v) = (x + random_double(), y + random_double());
                 // NOTE: make ray from camera eye to sphere
                 // https://raytracing.github.io/images/fig-1.04-ray-sphere.jpg
                 let ray_from_camera = self.camera.make_ray(u, v);
 
                 let traced_color = ray_color_recursive(&ray_from_camera, hittable, 50);
-                pixel_color = vec3_to_rgb8(rgb8_to_vec3(pixel_color) + rgb8_to_vec3(traced_color));
+                pixel_color = vec3_to_rgb8(write_color(
+                    rgb8_to_vec3(pixel_color) + rgb8_to_vec3(traced_color),
+                    n_samples,
+                ));
                 return pixel_color;
             }
         }
 
         // when world is empty
-        rgb8_from_vec3([0.0, 0.0, 0.0])
+        vec3_to_rgb8(glm::vec3(0.5, 0.7, 1.0))
     }
 
     pub fn set_pixel_with_art_style(
@@ -246,8 +252,7 @@ impl Hittable for Sphere {
             }
         }
 
-        let hit = self.get_ray_hit(ray, -1.0);
-        return (-1.0, hit);
+        return (-1.0, Intersection::new());
     }
 
     fn get_ray_hit(
@@ -340,11 +345,15 @@ fn ray_color_recursive(
     }
 
     // lerp background color
+    return default_background(ray);
+}
+
+fn default_background(ray: &Ray) -> Rgb<u8> {
     let unit_direction = ray.direction.normalize();
     let t = 0.5 * (unit_direction.y + 1.0);
     let start_color_v3 = glm::vec3(1.0, 1.0, 1.0);
     let end_color_v3 = glm::vec3(0.5, 0.7, 1.0);
     let background_color_v3 = (1.0 - t) * start_color_v3 + t * end_color_v3;
     let background_color = vec3_to_rgb8(255.0 * background_color_v3);
-    return background_color;
+    background_color
 }
