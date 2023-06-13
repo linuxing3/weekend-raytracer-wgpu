@@ -1,6 +1,9 @@
 use std::f32::consts::{FRAC_1_PI, PI};
 
-use super::{math::*, texture::*, GpuCamera, Hittable, Intersection, Ray, RenderParams, Sphere};
+use super::{
+    gpu_buffer::StorageBuffer, math::*, texture::*, GpuCamera, Hittable, Intersection, Ray,
+    RenderParams, Sphere,
+};
 use image::{DynamicImage, ImageBuffer, Rgb};
 use imgui::TextureId;
 use nalgebra_glm::{acos, atan2, dot, Vec3};
@@ -23,6 +26,7 @@ impl Layer {
 
         let [width, height] = size;
 
+        // FIXME: need to write data to GPU side
         let new_buffer: XImageBuffer = ImageBuffer::new(width as u32, height as u32);
 
         let imgbuf = Box::into_raw(Box::new(new_buffer));

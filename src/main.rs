@@ -174,6 +174,10 @@ fn main() {
             }
 
             Event::MainEventsCleared => {
+                window.request_redraw();
+            }
+
+            Event::RedrawRequested(window_id) if window_id == window.id() => {
                 let dt = last_time.elapsed().as_secs_f32();
 
                 {
@@ -188,6 +192,19 @@ fn main() {
                     last_time = now;
                 }
 
+                let frame = match context.surface.get_current_texture() {
+                    Ok(frame) => frame,
+                    Err(e) => {
+                        eprintln!("Surface error: {:?}", e);
+
+                        return;
+                    }
+                };
+
+                let view = frame
+                    .texture
+                    .create_view(&wgpu::TextureViewDescriptor::default());
+
                 {
                     imgui_platform
                         .prepare_frame(imgui.io_mut(), &window)
@@ -195,9 +212,18 @@ fn main() {
 
                     let ui = imgui.frame();
 
-                    // HACK:
                     {
                         layer.render_draw_list(ui, &render_params);
+                    }
+
+                    {
+                        let window = ui.window("Playground");
+
+                        window
+                            .size([300.0, 300.0], imgui::Condition::FirstUseEver)
+                            .build(|| {
+                                render_view_in_imgui(&context, &mut raytracer, &view);
+                            });
                     }
 
                     {
@@ -336,8 +362,6 @@ fn main() {
                     }
                 }
 
-                render_params.camera = fly_camera_controller.renderer_camera();
-
                 match raytracer.set_render_params(&context.queue, &render_params) {
                     Err(e) => {
                         eprintln!("Error setting render params: {e}")
@@ -347,23 +371,7 @@ fn main() {
                     }
                 }
 
-                window.request_redraw();
-            }
-
-            Event::RedrawRequested(window_id) if window_id == window.id() => {
-                let frame = match context.surface.get_current_texture() {
-                    Ok(frame) => frame,
-                    Err(e) => {
-                        eprintln!("Surface error: {:?}", e);
-
-                        return;
-                    }
-                };
-
-                let view = frame
-                    .texture
-                    .create_view(&wgpu::TextureViewDescriptor::default());
-
+                // render pass
                 let mut encoder = context
                     .device
                     .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
@@ -570,7 +578,7 @@ pub fn create_empty_texels(
 pub fn render_view_in_imgui(
     context: &GpuContext,
     raytracer: &mut Raytracer,
-    view: wgpu::TextureView,
+    view: &wgpu::TextureView,
 ) {
     let mut encoder = context
         .device
