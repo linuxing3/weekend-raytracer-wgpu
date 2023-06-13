@@ -164,8 +164,8 @@ impl Layer {
                 // https://raytracing.github.io/images/fig-1.04-ray-sphere.jpg
                 let ray_from_camera = self.camera.make_ray(u, v);
 
-                let traced_color = ray_color(&ray_from_camera, hittable, 50);
-                pixel_color = plus_rgb8(pixel_color, traced_color);
+                let traced_color = ray_color_recursive(&ray_from_camera, hittable, 50);
+                pixel_color = vec3_to_rgb8(rgb8_to_vec3(pixel_color) + rgb8_to_vec3(traced_color));
                 return pixel_color;
             }
         }
@@ -266,8 +266,8 @@ impl Hittable for Sphere {
         // front face?
         let f = glm::dot(&ray.direction, &n) < 0.0;
         n = match f {
-            true => n,
-            false => -n,
+            true => n.normalize(),
+            false => -(n.normalize()),
         };
 
         // ?
@@ -303,18 +303,14 @@ fn ray_color(
     // to some random point in the unit_normal_sphere
     let (_unit_root, unit_hit) =
         world.trace_ray(&mut unit_ray_from_p, 0.0, num::Float::max_value());
-    let unit_normal = unit_hit.n.normalize();
+    let n_normal = unit_hit.n;
 
     let ray_color = rgb8_from_vec3([
-        0.5 * (unit_normal.x + 1.0),
-        0.5 * (unit_normal.y + 1.0),
-        0.5 * (unit_normal.z + 1.0),
+        0.5 * (n_normal.x + 1.0),
+        0.5 * (n_normal.y + 1.0),
+        0.5 * (n_normal.z + 1.0),
     ]);
-    let background_color = rgb8_from_vec3([
-        unit_normal.x * 0.5,
-        unit_normal.y * 0.5,
-        unit_normal.z * 0.5,
-    ]);
+    let background_color = rgb8_from_vec3([n_normal.x * 0.5, n_normal.y * 0.5, n_normal.z * 0.5]);
     if camera_hit.t >= 0.0 {
         return ray_color;
     } else {
@@ -327,15 +323,28 @@ fn ray_color_recursive(
     world: &impl Hittable,
     depth: u8,
 ) -> Rgb<u8> {
-    let (root, hit) = world.trace_ray(ray, 0.0, num::Float::max_value());
-    let background_color = rgb8_from_vec3([123.0, 134.0, 123.0]);
+    let (root, hit) = world.trace_ray(ray, 0.001, num::Float::max_value());
+
     if depth <= 0 {
-        return background_color;
+        return Rgb([0, 0, 0]);
     };
+
+    // lerp ray tracing color
     if root >= 0.0 {
-        let target = hit.p + hit.n + random_in_unit_sphere();
+        // uniform scatter direction for all angles away from the hit point
+        let target = hit.p + hit.n + random_in_hemisphere(hit.n);
         let unit_ray_from_p = Ray::new(hit.p, target - hit.p);
-        return ray_color(&unit_ray_from_p, world, depth - 1);
+        return vec3_to_rgb8(
+            0.5 * rgb8_to_vec3(ray_color_recursive(&unit_ray_from_p, world, depth - 1)),
+        );
     }
+
+    // lerp background color
+    let unit_direction = ray.direction.normalize();
+    let t = 0.5 * (unit_direction.y + 1.0);
+    let start_color_v3 = glm::vec3(1.0, 1.0, 1.0);
+    let end_color_v3 = glm::vec3(0.5, 0.7, 1.0);
+    let background_color_v3 = (1.0 - t) * start_color_v3 + t * end_color_v3;
+    let background_color = vec3_to_rgb8(255.0 * background_color_v3);
     return background_color;
 }

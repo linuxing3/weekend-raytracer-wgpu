@@ -1,10 +1,18 @@
 use image::Rgb;
-use nalgebra_glm::{vec3, Vec3};
+use nalgebra_glm::{dot, vec3, Vec3};
 pub fn coord_to_color(
     u_or_v: u32,
     w_or_h: f32,
 ) -> f32 {
     (u_or_v as f32 / w_or_h as f32) * 2.0 - 1.0
+}
+
+pub fn vec3_to_rgb8(v: Vec3) -> Rgb<u8> {
+    Rgb([v.x as u8, v.y as u8, v.z as u8])
+}
+
+pub fn rgb8_to_vec3(color: Rgb<u8>) -> Vec3 {
+    vec3(color[0] as f32, color[1] as f32, color[2] as f32)
 }
 
 pub fn to_rgb8(x: f32) -> u8 {
@@ -119,4 +127,12 @@ pub fn random_in_unit_sphere() -> Vec3 {
         return p;
     }
     return glm::vec3(0.0, 0.0, 0.0);
+}
+
+pub fn random_in_hemisphere(normal: Vec3) -> Vec3 {
+    let in_unit_sphere = random_in_unit_sphere();
+    if dot(&in_unit_sphere, &normal) > 0.0 {
+        return in_unit_sphere;
+    } // In the same hemisphere as the normal
+    return -in_unit_sphere;
 }
