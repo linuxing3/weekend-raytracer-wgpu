@@ -74,23 +74,22 @@ pub fn adjust_gamma_color(
     color: Vec3,
     n_samples: u32,
 ) -> Vec3 {
-    let final_color = color / n_samples as f32;
+    let color_gamma1 = color / n_samples as f32;
 
-    final_color
+    color_gamma1
 }
 
 pub fn adjust_gamma2_color(
     color: Vec3,
     n_samples: u32,
 ) -> Vec3 {
+    let color_gamma1 = adjust_gamma_color(color, n_samples);
     let color_gamma2 = vec3(
-        num::Float::sqrt(color.x),
-        num::Float::sqrt(color.y),
-        num::Float::sqrt(color.z),
+        num::Float::sqrt(color_gamma1.x),
+        num::Float::sqrt(color_gamma1.y),
+        num::Float::sqrt(color_gamma1.z),
     );
-    let final_color = color_gamma2 / n_samples as f32;
-
-    final_color
+    color_gamma2
 }
 pub fn clamp<T: std::cmp::PartialOrd>(
     x: T,

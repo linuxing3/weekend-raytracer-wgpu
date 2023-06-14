@@ -235,10 +235,10 @@ impl Layer {
                     hit,
                 );
 
-                pixel_color = vec3_to_rgb8(adjust_gamma2_color(
-                    rgb8_to_vec3(pixel_color) + rgb8_to_vec3(traced_color),
-                    n_samples,
-                ));
+                pixel_color = vec3_to_rgb8(
+                    rgb8_to_vec3(pixel_color)
+                        + adjust_gamma_color(rgb8_to_vec3(traced_color), n_samples),
+                );
                 return pixel_color;
             }
         }
@@ -396,11 +396,11 @@ fn ray_color_recursive_mat(
         return Rgb([0, 0, 0]);
     };
 
-    // HACK: lerp ray tracing color, where hit.t = root = closest_t = moving step
+    // lerp ray tracing color
     if object.trace_ray_v2(&ray, 0.001, hit.t, hit) {
-        let (attenuation, scattered_ray) = material.scatter(&hit);
+        let (attenuation, scattered) = material.scatter(&hit);
         let mut color_v = rgb8_to_vec3(ray_color_recursive_mat(
-            &scattered_ray,
+            &scattered,
             object,
             material,
             fuzzy,
