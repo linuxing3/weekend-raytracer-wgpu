@@ -1,3 +1,4 @@
+pub use color::Color;
 use gpu_buffer::{StorageBuffer, UniformBuffer};
 pub use math::*;
 use nalgebra_glm::{acos, atan2, dot, max, vec3, Vec3};
@@ -7,6 +8,7 @@ pub use {angle::Angle, layer::Layer, texture::Texture, texture::WgpuTexture};
 use thiserror::Error;
 
 mod angle;
+mod color;
 mod gpu_buffer;
 mod layer;
 mod math;
