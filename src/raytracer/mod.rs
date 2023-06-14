@@ -1027,7 +1027,7 @@ impl Intersection {
         let n: Vec3 = glm::vec3(0.0, 0.0, 0.0);
         let u: f32 = 0.0;
         let v: f32 = 0.0;
-        let t: f32 = 0.0;
+        let t: f32 = std::f32::MAX;
         let f: bool = false;
         Self { p, n, u, v, t, f }
     }
@@ -1049,6 +1049,105 @@ impl Intersection {
     }
 }
 
+pub trait HittableV2 {
+    fn trace_ray_v2(
+        &self,
+        ray: &Ray,
+        tmin: f32,
+        tmax: f32,
+        hit: &mut Intersection,
+    ) -> bool;
+    fn get_ray_hit_v2(
+        &self,
+        ray: &Ray,
+        t: f32,
+        hit: &mut Intersection,
+    ) -> bool;
+}
+
+impl HittableV2 for Sphere {
+    fn trace_ray_v2(
+        &self,
+        ray: &Ray,
+        tmin: f32,
+        tmax: f32,
+        hit: &mut Intersection,
+    ) -> bool {
+        let sphere = *self;
+
+        let oc = ray.origin - sphere.center.xyz();
+
+        let a = dot(&ray.direction, &ray.direction);
+
+        let half_b = dot(&oc, &ray.direction);
+
+        let c = dot(&oc, &oc) - sphere.radius * sphere.radius;
+
+        let discriminant = half_b * half_b - a * c;
+
+        if discriminant >= 0.0 {
+            // NOTE: closet T
+            // https://raytracing.github.io/images/fig-1.04-ray-sphere.jpg
+            let mut root = (-half_b - num::Float::sqrt(discriminant)) / a;
+
+            if root < tmax && root > tmin {
+                return self.get_ray_hit_v2(ray, root, hit);
+            }
+
+            // farest T
+            root = (-half_b + num::Float::sqrt(discriminant)) / a;
+
+            if root < tmax && root > tmin {
+                return self.get_ray_hit_v2(ray, root, hit);
+            }
+        }
+
+        false
+    }
+
+    fn get_ray_hit_v2(
+        &self,
+        ray: &Ray,
+        t: f32,
+        hit: &mut Intersection,
+    ) -> bool {
+        if t < 0.0 {
+            return false;
+        }
+        let sphere = *self;
+        // p = ray.at(t)
+        let p = ray.origin + ray.direction * t;
+
+        // normal = P -c
+        // https://raytracing.github.io/images/fig-1.05-sphere-normal.jpg
+        let mut n = (1.0 / sphere.radius) * (p - sphere.center.xyz());
+
+        // front face?
+        let f = glm::dot(&ray.direction, &n) < 0.0;
+        n = match f {
+            true => n.normalize(),
+            false => -(n.normalize()),
+        };
+
+        // ?
+        let theta = acos(&-n.yy()).len() as f32;
+
+        // ?
+        let phi = atan2(&-n.zz(), &n.xx()).len() as f32 + PI;
+
+        // position.u on viewport
+        let u = 0.5 * FRAC_1_PI * phi;
+
+        // position.v on viewport
+        let v = FRAC_1_PI * theta;
+
+        *hit = Intersection { p, n, u, v, t, f };
+
+        true
+    }
+    // add code here
+}
+
 pub trait Hittable {
     fn trace_ray(
         &self,
@@ -1061,6 +1160,84 @@ pub trait Hittable {
         ray: &Ray,
         t: f32,
     ) -> Intersection;
+}
+
+impl Hittable for Sphere {
+    // add code here
+    fn trace_ray(
+        &self,
+        ray: &Ray,
+        tmin: f32,
+        tmax: f32,
+    ) -> (f32, Intersection) {
+        let sphere = *self;
+
+        let oc = ray.origin - sphere.center.xyz();
+
+        let a = dot(&ray.direction, &ray.direction);
+
+        let half_b = dot(&oc, &ray.direction);
+
+        let c = dot(&oc, &oc) - sphere.radius * sphere.radius;
+
+        let discriminant = half_b * half_b - a * c;
+
+        if discriminant >= 0.0 {
+            // NOTE: closet T
+            // https://raytracing.github.io/images/fig-1.04-ray-sphere.jpg
+            let mut root = (-half_b - num::Float::sqrt(discriminant)) / a;
+
+            if root < tmax && root > tmin {
+                let hit = self.get_ray_hit(ray, root);
+                return (root, hit);
+            }
+
+            // farest T
+            root = (-half_b + num::Float::sqrt(discriminant)) / a;
+
+            if root < tmax && root > tmin {
+                let hit = self.get_ray_hit(ray, root);
+                return (root, hit);
+            }
+        }
+
+        return (-1.0, Intersection::new());
+    }
+
+    fn get_ray_hit(
+        &self,
+        ray: &Ray,
+        t: f32,
+    ) -> Intersection {
+        let sphere = *self;
+        // p = ray.at(t)
+        let p = ray.origin + ray.direction * t;
+
+        // normal = P -c
+        // https://raytracing.github.io/images/fig-1.05-sphere-normal.jpg
+        let mut n = (1.0 / sphere.radius) * (p - sphere.center.xyz());
+
+        // front face?
+        let f = glm::dot(&ray.direction, &n) < 0.0;
+        n = match f {
+            true => n.normalize(),
+            false => -(n.normalize()),
+        };
+
+        // ?
+        let theta = acos(&-n.yy()).len() as f32;
+
+        // ?
+        let phi = atan2(&-n.zz(), &n.xx()).len() as f32 + PI;
+
+        // position.u on viewport
+        let u = 0.5 * FRAC_1_PI * phi;
+
+        // position.v on viewport
+        let v = FRAC_1_PI * theta;
+
+        return Intersection { p, n, u, v, t, f };
+    }
 }
 
 pub struct Scatter {

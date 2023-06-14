@@ -1,13 +1,11 @@
-use std::f32::consts::{FRAC_1_PI, PI};
-
 use super::{
-    math::*, texture::*, Angle, Camera, GpuCamera, Hittable, Intersection, Metal, Ray,
-    RenderParams, Scatterable, Sphere,
+    math::*, texture::*, GpuCamera, Hittable, HittableV2, Intersection, Metal, Ray, RenderParams,
+    Scatterable, Sphere,
 };
 
 use image::{DynamicImage, ImageBuffer, Rgb};
 use imgui::TextureId;
-use nalgebra_glm::{acos, atan2, dot, vec3, Vec3};
+use nalgebra_glm::{vec3, Vec3};
 
 pub struct Color {
     data: Vec3,
@@ -50,7 +48,6 @@ impl Layer {
 
         let [width, height] = size;
 
-        // FIXME: need to write data to GPU side
         let new_buffer: XImageBuffer = ImageBuffer::new(width as u32, height as u32);
 
         let imgbuf = Box::into_raw(Box::new(new_buffer));
@@ -209,32 +206,43 @@ impl Layer {
         let u = coord_to_color(x, width);
         let v = coord_to_color(y, height);
 
-        // hittable world
-        for object in &self.world {
-            let mut pixel_color = Rgb([0_u8, 0_u8, 0_u8]);
-            // NOTE:: multisampling
-            // https://raytracing.github.io/images/fig-1.07-pixel-samples.jpg
-            let n_samples = render_params.sampling.num_samples_per_pixel;
+        let hit = &mut Intersection::new();
 
-            for _s in 0..n_samples * 5 {
-                let (uu, vv) = (u + random_f32(), v + random_f32());
-                // NOTE: make ray from camera eye to sphere
-                // https://raytracing.github.io/images/fig-1.04-ray-sphere.jpg
-                let ray_from_camera = self.camera.make_ray(uu, vv);
+        for bounce in 0..10 {
+            // hittable world
+            for object in &self.world {
+                let mut pixel_color = Rgb([0_u8, 0_u8, 0_u8]);
+                // NOTE:: multisampling
+                // https://raytracing.github.io/images/fig-1.07-pixel-samples.jpg
+                let n_samples = render_params.sampling.num_samples_per_pixel;
 
-                // HACK:
-                let mut metal_material = Metal {
-                    ray: &ray_from_camera,
-                    albedo: vec3(1.0, 0.85, 0.57),
-                };
-                let traced_color =
-                    ray_color_recursive_mat(&ray_from_camera, object, &mut metal_material, 0.9, 50);
+                for _s in 0..n_samples * 5 {
+                    let (uu, vv) = (u + random_f32(), v + random_f32());
+                    // NOTE: make ray from camera eye to sphere
+                    // https://raytracing.github.io/images/fig-1.04-ray-sphere.jpg
+                    let ray_from_camera = self.camera.make_ray(uu, vv);
 
-                pixel_color = vec3_to_rgb8(adjust_gamma_color(
-                    rgb8_to_vec3(pixel_color) + rgb8_to_vec3(traced_color),
-                    n_samples,
-                ));
-                return pixel_color;
+                    // HACK:
+                    let mut metal_material = Metal {
+                        ray: &ray_from_camera,
+                        albedo: vec3(1.0, 0.85, 0.57),
+                    };
+                    // material + fuzzy + multisampling
+                    let traced_color = ray_color_recursive_mat(
+                        &ray_from_camera,
+                        object,
+                        &mut metal_material,
+                        0.9,
+                        50,
+                        hit,
+                    );
+
+                    pixel_color = vec3_to_rgb8(adjust_gamma_color(
+                        rgb8_to_vec3(pixel_color) + rgb8_to_vec3(traced_color),
+                        n_samples,
+                    ));
+                    return pixel_color;
+                }
             }
         }
 
@@ -272,84 +280,6 @@ impl Layer {
         t: f32,
     ) -> Vec3 {
         return ray.origin + t * ray.direction;
-    }
-}
-
-impl Hittable for Sphere {
-    // add code here
-    fn trace_ray(
-        &self,
-        ray: &Ray,
-        tmin: f32,
-        tmax: f32,
-    ) -> (f32, Intersection) {
-        let sphere = *self;
-
-        let oc = ray.origin - sphere.center.xyz();
-
-        let a = dot(&ray.direction, &ray.direction);
-
-        let half_b = dot(&oc, &ray.direction);
-
-        let c = dot(&oc, &oc) - sphere.radius * sphere.radius;
-
-        let discriminant = half_b * half_b - a * c;
-
-        if discriminant >= 0.0 {
-            // NOTE: closet T
-            // https://raytracing.github.io/images/fig-1.04-ray-sphere.jpg
-            let mut root = (-half_b - num::Float::sqrt(discriminant)) / a;
-
-            if root < tmax && root > tmin {
-                let hit = self.get_ray_hit(ray, root);
-                return (root, hit);
-            }
-
-            // farest T
-            root = (-half_b + num::Float::sqrt(discriminant)) / a;
-
-            if root < tmax && root > tmin {
-                let hit = self.get_ray_hit(ray, root);
-                return (root, hit);
-            }
-        }
-
-        return (-1.0, Intersection::new());
-    }
-
-    fn get_ray_hit(
-        &self,
-        ray: &Ray,
-        t: f32,
-    ) -> Intersection {
-        let sphere = *self;
-        // p = ray.at(t)
-        let p = ray.origin + ray.direction * t;
-
-        // normal = P -c
-        // https://raytracing.github.io/images/fig-1.05-sphere-normal.jpg
-        let mut n = (1.0 / sphere.radius) * (p - sphere.center.xyz());
-
-        // front face?
-        let f = glm::dot(&ray.direction, &n) < 0.0;
-        n = match f {
-            true => n.normalize(),
-            false => -(n.normalize()),
-        };
-
-        // ?
-        let theta = acos(&-n.yy()).len() as f32;
-
-        // ?
-        let phi = atan2(&-n.zz(), &n.xx()).len() as f32 + PI;
-
-        // position.u on viewport
-        let u = 0.5 * FRAC_1_PI * phi;
-
-        // position.v on viewport
-        let v = FRAC_1_PI * theta;
-
-        return Intersection { p, n, u, v, t, f };
     }
 }
 
@@ -459,19 +389,18 @@ fn ray_color_recursive(
  */
 fn ray_color_recursive_mat(
     ray: &Ray,
-    object: &impl Hittable,
+    object: &impl HittableV2,
     material: &mut impl Scatterable,
     fuzzy: f32,
     depth: u8,
+    hit: &mut Intersection,
 ) -> Rgb<u8> {
     if depth <= 0 {
         return Rgb([0, 0, 0]);
     };
 
     // lerp ray tracing color
-    let (root, hit) = object.trace_ray(ray, 0.001, num::Float::max_value());
-
-    if root >= 0.0 {
+    if object.trace_ray_v2(&ray, 0.001, hit.t, hit) {
         let (attenuation, scattered) = material.scatter(&hit);
         let mut color_v = rgb8_to_vec3(ray_color_recursive_mat(
             &scattered,
@@ -479,13 +408,14 @@ fn ray_color_recursive_mat(
             material,
             fuzzy,
             depth - 1,
+            hit,
         ));
 
         color_v.x *= attenuation.x * fuzzy;
         color_v.y *= attenuation.y * fuzzy;
         color_v.z *= attenuation.z * fuzzy;
         return vec3_to_rgb8(color_v);
-    }
+    };
 
     // lerp background color
     return default_background(ray);
