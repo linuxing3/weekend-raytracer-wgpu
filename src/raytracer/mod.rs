@@ -1033,8 +1033,8 @@ pub struct Scatter {
     albedo: Vec3,
 }
 
-pub struct Metal {
-    ray: Ray,
+pub struct Metal<'a> {
+    ray: &'a Ray,
     albedo: Vec3,
 }
 pub trait Scatterable {
@@ -1057,7 +1057,7 @@ impl Scatterable for Scatter {
     }
 }
 
-impl Scatterable for Metal {
+impl<'a> Scatterable for Metal<'a> {
     // add code here
     fn scatter(
         &mut self,

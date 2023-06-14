@@ -1,12 +1,36 @@
 use std::f32::consts::{FRAC_1_PI, PI};
 
 use super::{
-    gpu_buffer::StorageBuffer, math::*, texture::*, GpuCamera, Hittable, Intersection, Ray,
-    RenderParams, Scatter, Scatterable, Sphere,
+    math::*, texture::*, GpuCamera, Hittable, Intersection, Metal, Ray, RenderParams, Scatterable,
+    Sphere,
 };
+
 use image::{DynamicImage, ImageBuffer, Rgb};
 use imgui::TextureId;
 use nalgebra_glm::{acos, atan2, dot, vec3, Vec3};
+
+pub struct Color {
+    data: Vec3,
+}
+
+impl Color {
+    pub fn mul(
+        &mut self,
+        v: Vec3,
+    ) {
+        self.data.x *= v.x;
+        self.data.y *= v.y;
+        self.data.z *= v.z;
+    }
+}
+
+impl Color {
+    pub fn new() -> Self {
+        Self {
+            data: vec3(0.0, 0.0, 0.0),
+        }
+    }
+}
 
 pub struct Layer {
     texture_id: imgui::TextureId,
@@ -32,8 +56,8 @@ impl Layer {
         let imgbuf = Box::into_raw(Box::new(new_buffer));
 
         // Generating hittable objects
-        let sphere1 = Sphere::new(glm::vec3(-3.0, -3.0, -1.0), 2.0, 1);
-        let sphere2 = Sphere::new(glm::vec3(-3.0, -50.0, -1.0), 51.0, 1);
+        let sphere1 = Sphere::new(glm::vec3(-3.0, -3.0, -1.0), 2.0, 2);
+        let sphere2 = Sphere::new(glm::vec3(-3.0, -50.0, -1.0), 51.0, 2);
         let world = vec![sphere1, sphere2];
 
         let texture_id = TextureId::new(0);
@@ -193,7 +217,13 @@ impl Layer {
                 // https://raytracing.github.io/images/fig-1.04-ray-sphere.jpg
                 let ray_from_camera = self.camera.make_ray(u, v);
 
-                let traced_color = ray_color_recursive(&ray_from_camera, hittable, 50);
+                // HACK:
+                let mut metal_material = Metal {
+                    ray: &ray_from_camera,
+                    albedo: vec3(1.0, 0.85, 0.57),
+                };
+                let traced_color =
+                    ray_color_recursive_mat(&ray_from_camera, hittable, &mut metal_material, 50);
                 pixel_color = vec3_to_rgb8(adjust_gamma_color(
                     rgb8_to_vec3(pixel_color) + rgb8_to_vec3(traced_color),
                     n_samples,
@@ -388,16 +418,18 @@ fn ray_color_recursive_mat(
     let (root, hit) = world.trace_ray(ray, 0.001, num::Float::max_value());
 
     if root >= 0.0 {
-        // BUG: uniform scatter direction for all angles away from the hit point
         let (attenuation, scattered) = material.scatter(&hit);
-        return vec3_to_rgb8(
-            0.5 * rgb8_to_vec3(ray_color_recursive_mat(
-                &scattered,
-                world,
-                material,
-                depth - 1,
-            )),
-        );
+        let mut color_v = rgb8_to_vec3(ray_color_recursive_mat(
+            &scattered,
+            world,
+            material,
+            depth - 1,
+        ));
+
+        color_v.x *= attenuation.x;
+        color_v.y *= attenuation.y;
+        color_v.z *= attenuation.z;
+        return vec3_to_rgb8(color_v);
     }
 
     // lerp background color
