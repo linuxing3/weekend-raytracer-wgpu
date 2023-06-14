@@ -1,6 +1,6 @@
 use gpu_buffer::{StorageBuffer, UniformBuffer};
 pub use math::*;
-use nalgebra_glm::{acos, atan2, dot, Vec3};
+use nalgebra_glm::{acos, atan2, dot, max, vec3, Vec3};
 use wgpu::util::DeviceExt;
 pub use {angle::Angle, layer::Layer, texture::Texture, texture::WgpuTexture};
 
@@ -12,7 +12,7 @@ mod layer;
 mod math;
 mod texture;
 
-use std::f32::consts::*;
+use std::f32::{consts::*, EPSILON};
 
 pub struct Raytracer {
     vertex_uniform_bind_group: wgpu::BindGroup,
@@ -924,6 +924,24 @@ const VERTICES: &[Vertex] = &[
     },
 ];
 
+// from wgsl
+fn texture_lookup(
+    desc: TextureDescriptor,
+    textures: &[[f32; 3]],
+    u: f32,
+    v: f32,
+) -> Vec3 {
+    let u = clamp(u, 0_f32, 1_f32);
+    let v = 1_f32 - clamp(v, 0_f32, 1_f32);
+
+    let j = (u * desc.width as f32) as u32;
+    let i = (v * desc.height as f32) as u32;
+    let idx = i * desc.width + j;
+
+    let elem = (*textures)[desc.offset as usize + idx as usize];
+    return vec3(elem[0], elem[1], elem[2]);
+}
+
 pub struct Ray {
     origin: Vec3,
     direction: Vec3,
@@ -957,11 +975,6 @@ impl Ray {
 
         Self { origin, direction }
     }
-}
-
-pub struct Scatter {
-    ray: Ray,
-    albedo: Vec3,
 }
 
 pub struct Intersection {
@@ -1013,4 +1026,49 @@ pub trait Hittable {
         ray: &Ray,
         t: f32,
     ) -> Intersection;
+}
+
+pub struct Scatter {
+    ray: Ray,
+    albedo: Vec3,
+}
+
+pub struct Metal {
+    ray: Ray,
+    albedo: Vec3,
+}
+pub trait Scatterable {
+    fn scatter(
+        &mut self,
+        rec: &Intersection,
+    ) -> (Vec3, Ray);
+}
+
+impl Scatterable for Scatter {
+    // add code here
+    fn scatter(
+        &mut self,
+        rec: &Intersection,
+    ) -> (Vec3, Ray) {
+        let scatter_direction = rec.p - random_unit_vector();
+        let ray_scattered = Ray::new(self.ray.origin, scatter_direction);
+        let attenuation = self.albedo;
+        (attenuation, ray_scattered)
+    }
+}
+
+impl Scatterable for Metal {
+    // add code here
+    fn scatter(
+        &mut self,
+        rec: &Intersection,
+    ) -> (Vec3, Ray) {
+        let reflected = reflect(unit_vertor(self.ray.direction), rec.n);
+        let ray_scattered = Ray::new(rec.p, reflected);
+        let attenuation = self.albedo;
+        if dot(&ray_scattered.direction, &rec.n) > 0.0 {
+            return (attenuation, ray_scattered);
+        }
+        return (vec3(0.0, 0.0, 0.0), ray_scattered);
+    }
 }

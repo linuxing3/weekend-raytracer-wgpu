@@ -7,6 +7,10 @@ pub fn coord_to_color(
     (u_or_v as f32 / w_or_h as f32) * 2.0 - 1.0
 }
 
+pub fn arry_to_vec3(color: [f32; 3]) -> Vec3 {
+    vec3(color[0] as f32, color[1] as f32, color[2] as f32)
+}
+
 pub fn vec3_to_rgb8(v: Vec3) -> Rgb<u8> {
     Rgb([v.x as u8, v.y as u8, v.z as u8])
 }
@@ -125,4 +129,18 @@ pub fn random_in_hemisphere(normal: Vec3) -> Vec3 {
         return in_unit_sphere;
     } // In the same hemisphere as the normal
     return -in_unit_sphere;
+}
+
+pub fn unit_vertor(v: Vec3) -> Vec3 {
+    v / v.len() as f32
+}
+pub fn random_unit_vector() -> Vec3 {
+    return unit_vertor(random_in_unit_sphere());
+}
+
+pub fn reflect(
+    v: Vec3,
+    n: Vec3,
+) -> Vec3 {
+    v - 2.0 * dot(&v, &n) * n
 }

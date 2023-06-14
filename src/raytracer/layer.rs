@@ -2,11 +2,11 @@ use std::f32::consts::{FRAC_1_PI, PI};
 
 use super::{
     gpu_buffer::StorageBuffer, math::*, texture::*, GpuCamera, Hittable, Intersection, Ray,
-    RenderParams, Sphere,
+    RenderParams, Scatter, Scatterable, Sphere,
 };
 use image::{DynamicImage, ImageBuffer, Rgb};
 use imgui::TextureId;
-use nalgebra_glm::{acos, atan2, dot, Vec3};
+use nalgebra_glm::{acos, atan2, dot, vec3, Vec3};
 
 pub struct Layer {
     texture_id: imgui::TextureId,
@@ -67,7 +67,7 @@ impl Layer {
             depth_or_array_layers: 1,
         };
 
-        let imgui_texture: _ =
+        let imgui_texture =
             WgpuTexture::new_imgui_texture(&device, &queue, &renderer, &bytes, size);
 
         self.texture_id = renderer.textures.insert(imgui_texture);
@@ -354,19 +354,49 @@ fn ray_color_recursive(
     world: &impl Hittable,
     depth: u8,
 ) -> Rgb<u8> {
-    let (root, hit) = world.trace_ray(ray, 0.001, num::Float::max_value());
-
     if depth <= 0 {
         return Rgb([0, 0, 0]);
     };
 
     // lerp ray tracing color
+    let (root, hit) = world.trace_ray(ray, 0.001, num::Float::max_value());
+
     if root >= 0.0 {
         // uniform scatter direction for all angles away from the hit point
         let target = hit.p + hit.n + random_in_hemisphere(hit.n);
         let unit_ray_from_p = Ray::new(hit.p, target - hit.p);
         return vec3_to_rgb8(
             0.5 * rgb8_to_vec3(ray_color_recursive(&unit_ray_from_p, world, depth - 1)),
+        );
+    }
+
+    // lerp background color
+    return default_background(ray);
+}
+
+fn ray_color_recursive_mat(
+    ray: &Ray,
+    world: &impl Hittable,
+    material: &mut impl Scatterable,
+    depth: u8,
+) -> Rgb<u8> {
+    if depth <= 0 {
+        return Rgb([0, 0, 0]);
+    };
+
+    // lerp ray tracing color
+    let (root, hit) = world.trace_ray(ray, 0.001, num::Float::max_value());
+
+    if root >= 0.0 {
+        // BUG: uniform scatter direction for all angles away from the hit point
+        let (attenuation, scattered) = material.scatter(&hit);
+        return vec3_to_rgb8(
+            0.5 * rgb8_to_vec3(ray_color_recursive_mat(
+                &scattered,
+                world,
+                material,
+                depth - 1,
+            )),
         );
     }
 
