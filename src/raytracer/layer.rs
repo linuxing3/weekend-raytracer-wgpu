@@ -393,7 +393,7 @@ fn ray_color_recursive_mat(
     hit: &mut Intersection,
 ) -> Rgb<u8> {
     if depth <= 0 {
-        return Rgb([0, 0, 0]);
+        return default_background(ray);
     };
 
     // lerp ray tracing color
@@ -422,8 +422,12 @@ fn default_background(ray: &Ray) -> Rgb<u8> {
     let unit_direction = ray.direction.normalize();
     let t = 0.5 * (unit_direction.y + 1.0);
     let start_color_v3 = glm::vec3(1.0, 1.0, 1.0);
-    let end_color_v3 = glm::vec3(0.5, 0.7, 1.0);
+    let end_color_v3 = glm::vec3(0.2, 0.3, 0.3);
     let background_color_v3 = (1.0 - t) * start_color_v3 + t * end_color_v3;
     let background_color = vec3_to_rgb8(255.0 * background_color_v3);
     background_color
+}
+
+fn gradient_background(ray: &Ray) -> Rgb<u8> {
+    Rgb([ray.direction.y as u8, ray.direction.x as u8, 50])
 }
