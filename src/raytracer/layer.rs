@@ -207,42 +207,39 @@ impl Layer {
         let v = coord_to_color(y, height);
 
         let hit = &mut Intersection::new();
+        // hittable world
+        for object in &self.world {
+            let mut pixel_color = Rgb([0_u8, 0_u8, 0_u8]);
+            // NOTE:: multisampling
+            // https://raytracing.github.io/images/fig-1.07-pixel-samples.jpg
+            let n_samples = render_params.sampling.num_samples_per_pixel;
 
-        for bounce in 0..10 {
-            // hittable world
-            for object in &self.world {
-                let mut pixel_color = Rgb([0_u8, 0_u8, 0_u8]);
-                // NOTE:: multisampling
-                // https://raytracing.github.io/images/fig-1.07-pixel-samples.jpg
-                let n_samples = render_params.sampling.num_samples_per_pixel;
+            for _s in 0..n_samples * 5 {
+                let (uu, vv) = (u + random_f32(), v + random_f32());
+                // NOTE: make ray from camera eye to sphere
+                // https://raytracing.github.io/images/fig-1.04-ray-sphere.jpg
+                let ray_from_camera = self.camera.make_ray(uu, vv);
 
-                for _s in 0..n_samples * 5 {
-                    let (uu, vv) = (u + random_f32(), v + random_f32());
-                    // NOTE: make ray from camera eye to sphere
-                    // https://raytracing.github.io/images/fig-1.04-ray-sphere.jpg
-                    let ray_from_camera = self.camera.make_ray(uu, vv);
+                // HACK:
+                let mut metal_material = Metal {
+                    ray: &ray_from_camera,
+                    albedo: vec3(1.0, 0.85, 0.57),
+                };
+                // material + fuzzy + multisampling
+                let traced_color = ray_color_recursive_mat(
+                    &ray_from_camera,
+                    object,
+                    &mut metal_material,
+                    0.9,
+                    50,
+                    hit,
+                );
 
-                    // HACK:
-                    let mut metal_material = Metal {
-                        ray: &ray_from_camera,
-                        albedo: vec3(1.0, 0.85, 0.57),
-                    };
-                    // material + fuzzy + multisampling
-                    let traced_color = ray_color_recursive_mat(
-                        &ray_from_camera,
-                        object,
-                        &mut metal_material,
-                        0.9,
-                        50,
-                        hit,
-                    );
-
-                    pixel_color = vec3_to_rgb8(adjust_gamma_color(
-                        rgb8_to_vec3(pixel_color) + rgb8_to_vec3(traced_color),
-                        n_samples,
-                    ));
-                    return pixel_color;
-                }
+                pixel_color = vec3_to_rgb8(adjust_gamma2_color(
+                    rgb8_to_vec3(pixel_color) + rgb8_to_vec3(traced_color),
+                    n_samples,
+                ));
+                return pixel_color;
             }
         }
 
@@ -399,11 +396,11 @@ fn ray_color_recursive_mat(
         return Rgb([0, 0, 0]);
     };
 
-    // lerp ray tracing color
+    // HACK: lerp ray tracing color, where hit.t = root = closest_t = moving step
     if object.trace_ray_v2(&ray, 0.001, hit.t, hit) {
-        let (attenuation, scattered) = material.scatter(&hit);
+        let (attenuation, scattered_ray) = material.scatter(&hit);
         let mut color_v = rgb8_to_vec3(ray_color_recursive_mat(
-            &scattered,
+            &scattered_ray,
             object,
             material,
             fuzzy,
