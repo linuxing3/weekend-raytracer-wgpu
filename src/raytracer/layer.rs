@@ -1,8 +1,8 @@
 use std::f32::consts::{FRAC_1_PI, PI};
 
 use super::{
-    math::*, texture::*, GpuCamera, Hittable, Intersection, Metal, Ray, RenderParams, Scatterable,
-    Sphere,
+    math::*, texture::*, Angle, Camera, GpuCamera, Hittable, Intersection, Metal, Ray,
+    RenderParams, Scatterable, Sphere,
 };
 
 use image::{DynamicImage, ImageBuffer, Rgb};
@@ -56,9 +56,15 @@ impl Layer {
         let imgbuf = Box::into_raw(Box::new(new_buffer));
 
         // Generating hittable objects
-        let sphere1 = Sphere::new(glm::vec3(-3.0, -3.0, -1.0), 2.0, 2);
-        let sphere2 = Sphere::new(glm::vec3(-3.0, -50.0, -1.0), 51.0, 2);
-        let world = vec![sphere1, sphere2];
+        let mut world = vec![];
+
+        for i in 0..5 {
+            world.push(Sphere::new(
+                glm::vec3(-3.0 * (i as f32), 1.0 * (i as f32), 0.0 + (i as f32)),
+                1.0,
+                2,
+            ));
+        }
 
         let texture_id = TextureId::new(0);
 
@@ -186,12 +192,7 @@ impl Layer {
             for y in 0..height as u32 {
                 for x in 0..width as u32 {
                     let pixel = (*self.imgbuf).get_pixel_mut(x, y);
-
-                    let u = coord_to_color(x, width);
-
-                    let v = coord_to_color(y, height);
-
-                    *pixel = self.per_pixel(u, v, render_params);
+                    *pixel = self.per_pixel(x, y, render_params);
                 }
             }
         }
@@ -200,22 +201,26 @@ impl Layer {
     // BUG:
     pub fn per_pixel(
         &mut self,
-        x: f32,
-        y: f32,
+        x: u32,
+        y: u32,
         render_params: &RenderParams,
     ) -> Rgb<u8> {
+        let [width, height] = self.vp_size;
+        let u = coord_to_color(x, width);
+        let v = coord_to_color(y, height);
+
         // hittable world
-        for hittable in &self.world {
+        for object in &self.world {
             let mut pixel_color = Rgb([0_u8, 0_u8, 0_u8]);
             // NOTE:: multisampling
             // https://raytracing.github.io/images/fig-1.07-pixel-samples.jpg
             let n_samples = render_params.sampling.num_samples_per_pixel;
 
             for _s in 0..n_samples * 5 {
-                let (u, v) = (x + random_double(), y + random_double());
+                let (uu, vv) = (u + random_f32(), v + random_f32());
                 // NOTE: make ray from camera eye to sphere
                 // https://raytracing.github.io/images/fig-1.04-ray-sphere.jpg
-                let ray_from_camera = self.camera.make_ray(u, v);
+                let ray_from_camera = self.camera.make_ray(uu, vv);
 
                 // HACK:
                 let mut metal_material = Metal {
@@ -223,7 +228,8 @@ impl Layer {
                     albedo: vec3(1.0, 0.85, 0.57),
                 };
                 let traced_color =
-                    ray_color_recursive_mat(&ray_from_camera, hittable, &mut metal_material, 50);
+                    ray_color_recursive_mat(&ray_from_camera, object, &mut metal_material, 0.9, 50);
+
                 pixel_color = vec3_to_rgb8(adjust_gamma_color(
                     rgb8_to_vec3(pixel_color) + rgb8_to_vec3(traced_color),
                     n_samples,
@@ -289,7 +295,7 @@ impl Hittable for Sphere {
 
         let discriminant = half_b * half_b - a * c;
 
-        if discriminant > 0.0 {
+        if discriminant >= 0.0 {
             // NOTE: closet T
             // https://raytracing.github.io/images/fig-1.04-ray-sphere.jpg
             let mut root = (-half_b - num::Float::sqrt(discriminant)) / a;
@@ -347,6 +353,21 @@ impl Hittable for Sphere {
     }
 }
 
+/**
+ *
+ * Calculate the color of ray tracing, considering the followings:
+ * 1. multitimes bouncing
+ * 2. send ray from eye
+ * 3. hit the sphere at, got intersection (point vector, normal vector, etc.)
+ * 4. resend ray from p to unit sphere with normal vector lenght as radius
+ * 5. convert normal plus other physical factors to get final color
+ *
+ * @params
+ *
+ * @ray:   the entre ray
+ * @world: a impl Hittable, which can be hit by ray
+ * @depth: limit ray bouncing times
+ */
 fn ray_color(
     mut ray: &Ray,
     world: &impl Hittable,
@@ -379,6 +400,21 @@ fn ray_color(
     }
 }
 
+/**
+ *
+ * Calculate the color of ray tracing, considering the followings:
+ * 1. multitimes bouncing
+ * 2. send ray from eye
+ * 3. hit the sphere at, got intersection (point vector, normal vector, etc.)
+ * 4. recursively send ray for sampling times, from p to unit sphere with normal vector lenght as radius
+ * 5. convert normal plus other physical factors to get final color
+ *
+ * @params
+ *
+ * @ray:   the entre ray
+ * @world: a impl Hittable, which can be hit by ray
+ * @depth: limit ray bouncing times
+ */
 fn ray_color_recursive(
     ray: &Ray,
     world: &impl Hittable,
@@ -404,10 +440,28 @@ fn ray_color_recursive(
     return default_background(ray);
 }
 
+/**
+ *
+ * Calculate the color of ray tracing, considering the followings:
+ * 1. multitimes bouncing
+ * 2. send ray from eye
+ * 3. hit the sphere at, got intersection (point vector, normal vector, etc.)
+ * 4. recursively send ray for sampling times with material color/texture, from p to unit sphere with normal vector lenght as radius
+ * 5. convert normal plus other physical factors (attenuation, fuzzy refection) to get final color
+ *
+ * @params
+ *
+ * @ray:   the entre ray
+ * @world: a impl Hittable, which can be hit by ray
+ * @material: materials including metal, dielectric, lambertian, etc
+ * @fuzzy:    fuzzy reflection factor
+ * @depth: limit ray bouncing times
+ */
 fn ray_color_recursive_mat(
     ray: &Ray,
-    world: &impl Hittable,
+    object: &impl Hittable,
     material: &mut impl Scatterable,
+    fuzzy: f32,
     depth: u8,
 ) -> Rgb<u8> {
     if depth <= 0 {
@@ -415,20 +469,21 @@ fn ray_color_recursive_mat(
     };
 
     // lerp ray tracing color
-    let (root, hit) = world.trace_ray(ray, 0.001, num::Float::max_value());
+    let (root, hit) = object.trace_ray(ray, 0.001, num::Float::max_value());
 
     if root >= 0.0 {
         let (attenuation, scattered) = material.scatter(&hit);
         let mut color_v = rgb8_to_vec3(ray_color_recursive_mat(
             &scattered,
-            world,
+            object,
             material,
+            fuzzy,
             depth - 1,
         ));
 
-        color_v.x *= attenuation.x;
-        color_v.y *= attenuation.y;
-        color_v.z *= attenuation.z;
+        color_v.x *= attenuation.x * fuzzy;
+        color_v.y *= attenuation.y * fuzzy;
+        color_v.z *= attenuation.z * fuzzy;
         return vec3_to_rgb8(color_v);
     }
 

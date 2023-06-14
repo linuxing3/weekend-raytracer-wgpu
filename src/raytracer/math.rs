@@ -1,10 +1,11 @@
 use image::Rgb;
 use nalgebra_glm::{dot, vec3, Vec3};
+
 pub fn coord_to_color(
     u_or_v: u32,
     w_or_h: f32,
 ) -> f32 {
-    (u_or_v as f32 / w_or_h as f32) * 2.0 - 1.0
+    (u_or_v as f32 / w_or_h as f32)
 }
 
 pub fn arry_to_vec3(color: [f32; 3]) -> Vec3 {
@@ -78,6 +79,19 @@ pub fn adjust_gamma_color(
     final_color
 }
 
+pub fn adjust_gamma2_color(
+    color: Vec3,
+    n_samples: u32,
+) -> Vec3 {
+    let color_gamma2 = vec3(
+        num::Float::sqrt(color.x),
+        num::Float::sqrt(color.y),
+        num::Float::sqrt(color.z),
+    );
+    let final_color = color_gamma2 / n_samples as f32;
+
+    final_color
+}
 pub fn clamp<T: std::cmp::PartialOrd>(
     x: T,
     min: T,
@@ -91,7 +105,7 @@ pub fn clamp<T: std::cmp::PartialOrd>(
     };
     return x;
 }
-pub fn random_double() -> f32 {
+pub fn random_f32() -> f32 {
     // Returns a random real in [0,1).
     return rand::random::<f32>() / (std::f32::MAX + 1.0);
 }
@@ -100,7 +114,7 @@ pub fn random_double_rng(
     max: f32,
 ) -> f32 {
     // Returns a random real in [0,1).
-    return min + (max - min) * random_double();
+    return min + (max - min) * random_f32();
 }
 pub fn vec3_random(
     min: f32,

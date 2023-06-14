@@ -30,6 +30,12 @@ in `layer.rs` file, we trace ray!!!
 
 ### set color per pixel, with multisampling
 
+#### formula quadradic
+
+$
+t = \sqrt ( b ^ 2 - 4 * a * c  )
+$
+
 ```rust
 
     pub fn per_pixel(
@@ -124,3 +130,31 @@ assets/moon.jpeg
 assets/earthmap.jpeg
 
 - https://raytracing.github.io/images/earthmap.jpg
+
+## Acknowledge
+
+### Light
+
+### diffuse
+
+formula
+
+$
+\sin (\theta) + \cos ()
+$
+
+### reflect
+
+### refract
+
+### camera
+
+#### fov (field of view)
+
+### lens (aperture disk)
+
+### focus
+
+### view plane
+
+###

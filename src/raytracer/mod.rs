@@ -510,6 +510,39 @@ pub struct Camera {
     pub focus_distance: f32,
 }
 
+impl Camera {
+    pub fn new() -> Self {
+        let eye_pos = glm::vec3(0.0, 0.0, 2.0);
+        let look_at = glm::vec3(0.0, 0.0, -1.0);
+        let focus_distance = glm::magnitude(&(look_at - eye_pos));
+
+        // camera orientation
+        let yaw = Angle::degrees(0_f32);
+        let pitch = Angle::degrees(0_f32);
+        let forward = glm::vec3(
+            yaw.as_radians().cos() * pitch.as_radians().cos(),
+            pitch.as_radians().sin(),
+            yaw.as_radians().sin() * pitch.as_radians().cos(),
+        );
+        let eye_dir = glm::normalize(&forward);
+        let world_up = glm::vec3(0.0, 1.0, 0.0);
+        let right = glm::cross(&eye_dir, &world_up);
+        let up = glm::cross(&right, &eye_dir);
+
+        let vfov_degrees = 30.0;
+        let aperture = 0.8;
+
+        Camera {
+            eye_pos,
+            eye_dir,
+            up,
+            vfov: Angle::degrees(vfov_degrees),
+            aperture,
+            focus_distance,
+        }
+    }
+}
+
 #[derive(Clone, Copy, PartialEq)]
 
 pub struct SkyParams {
