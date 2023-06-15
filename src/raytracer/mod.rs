@@ -1001,7 +1001,7 @@ impl Ray {
         Self { origin, direction }
     }
 
-    pub fn new2(
+    pub fn new_from_xy(
         x: f32,
         y: f32,
     ) -> Self {
@@ -1051,60 +1051,6 @@ impl Intersection {
     }
 }
 
-pub trait HittableWorld {
-    fn trace_ray_color(
-        &self,
-        ray: &Ray,
-        n_samples: u32,
-        material: &mut impl Scatterable,
-        hit: &mut Intersection,
-    ) -> Rgb<u8>;
-}
-impl HittableWorld for Layer {
-    fn trace_ray_color(
-        &self,
-        ray: &Ray,
-        n_samples: u32,
-        material: &mut impl Scatterable,
-        hit: &mut Intersection,
-    ) -> Rgb<u8> {
-        let mut pixel_color = Rgb([0_u8, 0_u8, 0_u8]);
-        let mut throught_color = Rgb([55_u8, 55_u8, 55_u8]);
-        for (_i, object) in self.world.as_slice().into_iter().enumerate() {
-            let real_samples = n_samples;
-            for _s in 0..real_samples {
-                let traced_color = ray_color(&ray, object, material, 0.5, 50, hit);
-                // BUG: no gamma correction
-                pixel_color = vec3_to_rgb8(rgb8_to_vec3(pixel_color) + rgb8_to_vec3(traced_color));
-                throught_color =
-                    vec3_to_rgb8(rgb8_to_vec3(throught_color) - rgb8_to_vec3(traced_color));
-            }
-
-            if hit.t >= 0.0 {
-                return pixel_color;
-            }
-            return throught_color;
-        }
-        return throught_color;
-    }
-}
-
-pub trait ObjectHittable {
-    fn closest_object_hit(
-        &self,
-        ray: &Ray,
-        tmin: f32,
-        tmax: f32,
-        hit: &mut Intersection,
-    ) -> bool;
-    fn ray_hit_info(
-        &self,
-        ray: &Ray,
-        t: f32,
-        hit: &mut Intersection,
-    ) -> bool;
-}
-
 impl Sphere {
     pub fn closest_hit<'a>(
         &'a self,
@@ -1129,54 +1075,25 @@ impl Sphere {
                 return (false, None);
             }
         }
-        // next hit
+        // update hit intersect info
         rec.t = closest_t;
         rec.p = ray.origin + ray.direction * rec.t;
-        rec.n = (rec.p - self.center.xyz()).normalize();
+        let n = rec.p - self.center.xyz();
+        rec.f = dot(&ray.direction, &n) < 0.0;
+        rec.n = match rec.f {
+            true => n.normalize(),
+            false => -(n.normalize()),
+        };
+        let theta = acos(&-n.yy()).len() as f32;
+        let phi = atan2(&-n.zz(), &n.xx()).len() as f32 + PI;
+        rec.u = 0.5 * FRAC_1_PI * phi;
+        rec.v = FRAC_1_PI * theta;
+
         return (true, Some(rec));
     }
 }
 
-impl ObjectHittable for Sphere {
-    fn closest_object_hit(
-        &self,
-        ray: &Ray,
-        tmin: f32,
-        tmax: f32,
-        hit: &mut Intersection,
-    ) -> bool {
-        let sphere = *self;
-
-        let oc = ray.origin - sphere.center.xyz();
-
-        let a = dot(&ray.direction, &ray.direction);
-
-        let half_b = dot(&oc, &ray.direction);
-
-        let c = dot(&oc, &oc) - sphere.radius * sphere.radius;
-
-        let discriminant = half_b * half_b - a * c;
-
-        if discriminant >= 0.0 {
-            // NOTE: closet T
-            // https://raytracing.github.io/images/fig-1.04-ray-sphere.jpg
-            let mut closest_t = (-half_b - num::Float::sqrt(discriminant)) / a;
-
-            if closest_t < tmax && closest_t > tmin {
-                return self.ray_hit_info(ray, closest_t, hit);
-            }
-
-            // farest T
-            closest_t = (-half_b + num::Float::sqrt(discriminant)) / a;
-
-            if closest_t < tmax && closest_t > tmin {
-                return self.ray_hit_info(ray, closest_t, hit);
-            }
-        }
-
-        false
-    }
-
+impl Sphere {
     fn ray_hit_info(
         &self,
         ray: &Ray,
@@ -1220,8 +1137,8 @@ impl ObjectHittable for Sphere {
     // add code here
 }
 
-pub struct Scatter {
-    ray: Ray,
+pub struct Scatter<'a> {
+    ray: &'a Ray,
     albedo: Vec3,
 }
 
@@ -1236,7 +1153,7 @@ pub trait Scatterable {
     ) -> (Vec3, Ray);
 }
 
-impl Scatterable for Scatter {
+impl<'a> Scatterable for Scatter<'a> {
     // add code here
     fn scatter(
         &mut self,
@@ -1263,57 +1180,6 @@ impl<'a> Scatterable for Metal<'a> {
         }
         return (vec3(0.0, 0.0, 0.0), ray_scattered);
     }
-}
-
-/**
- *
- * Calculate the color of ray tracing, considering the followings:
- * 1. multitimes bouncing
- * 2. send ray from eye
- * 3. hit the sphere at, got intersection (point vector, normal vector, etc.)
- * 4. recursively send ray for sampling times with material color/texture, from p to unit sphere with normal vector lenght as radius
- * 5. convert normal plus other physical factors (attenuation, fuzzy refection) to get final color
- *
- * @params
- *
- * @ray:   the entre ray
- * @world: a impl Hittable, which can be hit by ray
- * @material: materials including metal, dielectric, lambertian, etc
- * @fuzzy:    fuzzy reflection factor
- * @depth: limit ray bouncing times
- */
-pub fn ray_color(
-    ray: &Ray,
-    object: &impl ObjectHittable,
-    material: &mut impl Scatterable,
-    fuzzy: f32,
-    depth: u8,
-    hit: &mut Intersection,
-) -> Rgb<u8> {
-    if depth <= 0 {
-        return Rgb([0, 0, 0]);
-    };
-
-    // lerp ray tracing color
-    if object.closest_object_hit(&ray, 0.001, hit.t, hit) {
-        let (attenuation, scattered) = material.scatter(&hit);
-        let mut color_v = rgb8_to_vec3(ray_color(
-            &scattered,
-            object,
-            material,
-            fuzzy,
-            depth - 1,
-            hit,
-        ));
-
-        color_v.x *= attenuation.x * fuzzy;
-        color_v.y *= attenuation.y * fuzzy;
-        color_v.z *= attenuation.z * fuzzy;
-        return vec3_to_rgb8(color_v);
-    };
-
-    // lerp background color
-    return default_background(ray);
 }
 
 pub fn default_background(ray: &Ray) -> Rgb<u8> {

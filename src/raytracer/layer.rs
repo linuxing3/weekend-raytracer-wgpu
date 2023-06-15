@@ -1,17 +1,13 @@
-use std::{
-    borrow::Borrow,
-    ops::{Deref, DerefMut},
-    rc::Rc,
-};
+use std::ops::DerefMut;
 
 use super::{
-    math::*, ray_color, texture::*, GpuCamera, HittableWorld, Intersection, Material, Metal,
-    ObjectHittable, Ray, RenderParams, Scatterable, Scene, Sphere,
+    math::*, texture::*, GpuCamera, Intersection, Material, Metal, Ray, RenderParams, Scatter,
+    Scatterable, Scene, Sphere,
 };
 
 use image::{DynamicImage, ImageBuffer, Rgb};
 use imgui::TextureId;
-use nalgebra_glm::{dot, vec3, Vec3};
+use nalgebra_glm::{vec3, Vec3};
 
 pub struct Color {
     data: Vec3,
@@ -100,12 +96,12 @@ impl Layer {
         ];
 
         let spheres = vec![
-            Sphere::new(glm::vec3(2.0, -1.0, 0.0), 2.0, 3_u32),
+            Sphere::new(glm::vec3(5.0, 1.2, -1.5), 1.2, 4_u32),
             Sphere::new(glm::vec3(0.0, -500.0, -1.0), 500.0, 0_u32),
             Sphere::new(glm::vec3(0.0, 1.0, 0.0), 1.0, 3_u32),
             Sphere::new(glm::vec3(-5.0, 1.0, 0.0), 1.0, 2_u32),
+            Sphere::new(glm::vec3(2.0, -1.0, 0.0), 2.0, 3_u32),
             Sphere::new(glm::vec3(5.0, 0.8, 1.5), 0.8, 1_u32),
-            Sphere::new(glm::vec3(5.0, 1.2, -1.5), 1.2, 4_u32),
         ];
 
         Scene { spheres, materials }
@@ -232,50 +228,75 @@ impl Layer {
         }
     }
 
+    /**
+     *
+     * Calculate the color of ray tracing, considering the followings:
+     * 1. multitimes bouncing
+     * 2. send ray from eye
+     * 3. hit the sphere at, got intersection (point vector, normal vector, etc.)
+     * 4. recursively send ray for sampling times with material color/texture, from p to unit sphere with normal vector lenght as radius
+     * 5. convert normal plus other physical factors (attenuation, fuzzy refection) to get final color
+     *
+     * @params
+     *
+     * @ray:   the entre ray
+     * @world: a impl Hittable, which can be hit by ray
+     * @material: materials including metal, dielectric, lambertian, etc
+     * @fuzzy:    fuzzy reflection factor
+     * @depth: limit ray bouncing times
+     */
     pub fn ray_color(
         &mut self,
         x: u32,
         y: u32,
         render_params: &RenderParams,
     ) -> Rgb<u8> {
-        let n_samples = render_params.sampling.num_samples_per_pixel;
-        let n_bounces = render_params.sampling.num_bounces;
-        let mut pixel_color = Rgb([0_u8, 0_u8, 0_u8]);
-        let mut depth: u32 = 10;
-
         let [width, height] = self.vp_size;
         let u = coord_to_color(x, width);
         let v = coord_to_color(y, height);
+
+        let n_samples = render_params.sampling.num_samples_per_pixel;
+        let n_bounces = render_params.sampling.num_bounces;
+        let depth: u32 = 20;
+        let fuzzy = 0.9;
+
         let mut pixel_color = vec3(0.0, 0.0, 0.0);
+
         // sampleing
-        for s in 0..n_samples {
+        for _s in 0..n_samples {
             let (uu, vv) = (u + random_f32(), v + random_f32());
-            let mut ray = self.camera.make_ray(uu, vv);
+            let ray = self.camera.make_ray(uu, vv);
             let mut metal_material = Metal {
                 ray: &ray,
                 albedo: vec3(1.0, 0.85, 0.57),
             };
+            let mut grass_material = Scatter {
+                ray: &ray,
+                albedo: vec3(1.0, 0.85, 0.57),
+            };
             let mut rec = Intersection::new();
-            if self.world_hit(&ray, 0.001, f32::MAX, &mut rec, depth) {
+
+            if self.ray_hit_world(&ray, 0.001, f32::MAX, &mut rec, depth) {
                 if depth <= 0 {
                     return vec3_to_rgb8(vec3(0.0, 0.0, 0.0));
                 }
-                let target = rec.p + rec.n + random_in_unit_sphere();
-                let new_ray = Ray::new(rec.p, target - rec.p);
-                if self.world_hit(&new_ray, 0.001, f32::MAX, &mut rec, depth - 1) {
-                    let (attenuation, scattered) = metal_material.scatter(&rec);
-                    let acc_color = rec.n * 255.0 / 2.0;
+                let (attenuation, scattered_ray) = metal_material.scatter(&rec);
+                if self.ray_hit_world(&scattered_ray, 0.001, f32::MAX, &mut rec, depth - 1) {
+                    let mut sampled_color = rec.n * 255.0 / 2.0;
+                    sampled_color.x *= (attenuation.x * fuzzy);
+                    sampled_color.y *= (attenuation.y * fuzzy);
+                    sampled_color.z *= (attenuation.z * fuzzy);
 
-                    pixel_color += acc_color;
-                    return vec3_to_rgb8(0.5 * pixel_color);
+                    pixel_color += sampled_color;
+                    return vec3_to_rgb8(pixel_color / 2.0);
                 }
             };
         }
 
-        vec3_to_rgb8(vec3(u * 255.0, v * 255.0, 255.0))
+        vec3_to_rgb8(vec3(v * 255.0, u * 255.0, 255.0))
     }
 
-    pub fn world_hit(
+    pub fn ray_hit_world(
         &mut self,
         ray: &Ray,
         tmin: f32,
@@ -285,14 +306,14 @@ impl Layer {
     ) -> bool {
         let mut temp_rec = Intersection::new();
         let mut hit_anything = false;
-        let mut closest_so_far = tmax;
-        let t = rec.t;
+        let mut closest_hit = tmax;
+        let old_hit = rec.t;
 
         for object in self.world[..].into_iter() {
-            let result = object.closest_hit(&ray, tmin, closest_so_far, &mut temp_rec);
+            let result = object.closest_hit(&ray, tmin, closest_hit, &mut temp_rec);
             if result.0 {
                 hit_anything = true;
-                closest_so_far = t;
+                closest_hit = old_hit;
                 *rec = *(result.1.unwrap().deref_mut());
             }
         }
