@@ -1,6 +1,6 @@
 use super::{
-    math::*, texture::*, GpuCamera, HittableWorld, Intersection, Metal, Ray, RenderParams,
-    Scatterable, Sphere,
+    math::*, texture::*, GpuCamera, HittableWorld, Intersection, Material, Metal, Ray,
+    RenderParams, Scatterable, Scene, Sphere,
 };
 
 use image::{DynamicImage, ImageBuffer, Rgb};
@@ -36,6 +36,7 @@ pub struct Layer {
     imgbuf: *mut XImageBuffer,
     pub camera: GpuCamera,
     pub world: Vec<Sphere>,
+    pub materials: Vec<Material>,
 }
 
 impl Layer {
@@ -53,15 +54,9 @@ impl Layer {
         let imgbuf = Box::into_raw(Box::new(new_buffer));
 
         // Generating hittable objects
-        let mut world = vec![];
-
-        for i in 0..5 {
-            world.push(Sphere::new(
-                glm::vec3(-3.0 * (i as f32), 1.0 * (i as f32), 0.0 + (i as f32)),
-                1.0,
-                2,
-            ));
-        }
+        let scene = Self::scene();
+        let world = scene.spheres;
+        let materials = scene.materials;
 
         let texture_id = TextureId::new(0);
 
@@ -71,7 +66,43 @@ impl Layer {
             imgbuf,
             camera,
             world,
+            materials,
         }
+    }
+
+    pub fn scene() -> Scene {
+        let materials = vec![
+            Material::Checkerboard {
+                even: Texture::new_from_color(glm::vec3(0.5_f32, 0.7_f32, 0.8_f32)),
+                odd: Texture::new_from_color(glm::vec3(0.9_f32, 0.9_f32, 0.9_f32)),
+            },
+            Material::Lambertian {
+                albedo: Texture::new_from_image("assets/moon.jpeg")
+                    .expect("Hardcoded path should be valid"),
+            },
+            Material::Metal {
+                albedo: Texture::new_from_color(glm::vec3(1_f32, 0.85_f32, 0.57_f32)),
+                fuzz: 0.4_f32,
+            },
+            Material::Dielectric {
+                refraction_index: 1.5_f32,
+            },
+            Material::Lambertian {
+                albedo: Texture::new_from_image("assets/earthmap.jpeg")
+                    .expect("Hardcoded path should be valid"),
+            },
+        ];
+
+        let spheres = vec![
+            Sphere::new(glm::vec3(2.0, -1.0, 0.0), 2.0, 3_u32),
+            Sphere::new(glm::vec3(0.0, -500.0, -1.0), 500.0, 0_u32),
+            Sphere::new(glm::vec3(0.0, 1.0, 0.0), 1.0, 3_u32),
+            Sphere::new(glm::vec3(-5.0, 1.0, 0.0), 1.0, 2_u32),
+            Sphere::new(glm::vec3(5.0, 0.8, 1.5), 0.8, 1_u32),
+            Sphere::new(glm::vec3(5.0, 1.2, -1.5), 1.2, 4_u32),
+        ];
+
+        Scene { spheres, materials }
     }
 
     pub fn register_texture(
