@@ -1,11 +1,17 @@
+use std::{
+    borrow::Borrow,
+    ops::{Deref, DerefMut},
+    rc::Rc,
+};
+
 use super::{
-    math::*, texture::*, GpuCamera, HittableWorld, Intersection, Material, Metal, Ray,
-    RenderParams, Scatterable, Scene, Sphere,
+    math::*, ray_color, texture::*, GpuCamera, HittableWorld, Intersection, Material, Metal,
+    ObjectHittable, Ray, RenderParams, Scatterable, Scene, Sphere,
 };
 
 use image::{DynamicImage, ImageBuffer, Rgb};
 use imgui::TextureId;
-use nalgebra_glm::{vec3, Vec3};
+use nalgebra_glm::{dot, vec3, Vec3};
 
 pub struct Color {
     data: Vec3,
@@ -220,39 +226,78 @@ impl Layer {
             for y in 0..height as u32 {
                 for x in 0..width as u32 {
                     let pixel = (*self.imgbuf).get_pixel_mut(x, y);
-                    *pixel = self.per_pixel(x, y, render_params);
+                    *pixel = self.ray_color(x, y, render_params);
                 }
             }
         }
     }
 
-    // BUG:
-    pub fn per_pixel(
+    pub fn ray_color(
         &mut self,
         x: u32,
         y: u32,
         render_params: &RenderParams,
     ) -> Rgb<u8> {
+        let n_samples = render_params.sampling.num_samples_per_pixel;
+        let n_bounces = render_params.sampling.num_bounces;
+        let mut pixel_color = Rgb([0_u8, 0_u8, 0_u8]);
+        let mut depth: u32 = 10;
+
         let [width, height] = self.vp_size;
         let u = coord_to_color(x, width);
         let v = coord_to_color(y, height);
-        let (uu, vv) = (u + random_f32(), v + random_f32());
-        let ray = self.camera.make_ray(uu, vv);
+        let mut pixel_color = vec3(0.0, 0.0, 0.0);
+        // sampleing
+        for s in 0..n_samples {
+            let (uu, vv) = (u + random_f32(), v + random_f32());
+            let mut ray = self.camera.make_ray(uu, vv);
+            let mut metal_material = Metal {
+                ray: &ray,
+                albedo: vec3(1.0, 0.85, 0.57),
+            };
+            let mut rec = Intersection::new();
+            if self.world_hit(&ray, 0.001, f32::MAX, &mut rec, depth) {
+                if depth <= 0 {
+                    return vec3_to_rgb8(vec3(0.0, 0.0, 0.0));
+                }
+                let target = rec.p + rec.n + random_in_unit_sphere();
+                let new_ray = Ray::new(rec.p, target - rec.p);
+                if self.world_hit(&new_ray, 0.001, f32::MAX, &mut rec, depth - 1) {
+                    let (attenuation, scattered) = metal_material.scatter(&rec);
+                    let acc_color = rec.n * 255.0 / 2.0;
 
-        let n_samples = render_params.sampling.num_samples_per_pixel;
-        let n_bounces = render_params.sampling.num_bounces;
-
-        let mut metal_material = Metal {
-            ray: &ray,
-            albedo: vec3(1.0, 0.85, 0.57),
-        };
-        let test_hit = &mut Intersection::new();
-        for _b in 0..n_bounces {
-            return self.trace_ray_color(&ray, n_samples, &mut metal_material, test_hit);
+                    pixel_color += acc_color;
+                    return vec3_to_rgb8(0.5 * pixel_color);
+                }
+            };
         }
 
-        // when world is empty
-        vec3_to_rgb8(glm::vec3(0.5, 0.7, 1.0))
+        vec3_to_rgb8(vec3(u * 255.0, v * 255.0, 255.0))
+    }
+
+    pub fn world_hit(
+        &mut self,
+        ray: &Ray,
+        tmin: f32,
+        tmax: f32,
+        rec: &mut Intersection,
+        depth: u32,
+    ) -> bool {
+        let mut temp_rec = Intersection::new();
+        let mut hit_anything = false;
+        let mut closest_so_far = tmax;
+        let t = rec.t;
+
+        for object in self.world[..].into_iter() {
+            let result = object.closest_hit(&ray, tmin, closest_so_far, &mut temp_rec);
+            if result.0 {
+                hit_anything = true;
+                closest_so_far = t;
+                *rec = *(result.1.unwrap().deref_mut());
+            }
+        }
+
+        return hit_anything;
     }
 
     pub fn set_pixel_with_art_style(
@@ -285,35 +330,5 @@ impl Layer {
         t: f32,
     ) -> Vec3 {
         return ray.origin + t * ray.direction;
-    }
-
-    pub fn miss_hit(
-        &self,
-        _ray: &Ray,
-    ) -> Intersection {
-        let mut closest_hit = Intersection::new();
-        closest_hit.t = -1.0;
-        return closest_hit;
-    }
-
-    pub fn closest_hit(
-        &self,
-        ray: &Ray,
-        root: f32,
-        object_index: usize,
-    ) -> Intersection {
-        let mut closest_hit = Intersection::new();
-        closest_hit.t = root;
-
-        let closest_object = self.world.as_slice()[object_index];
-
-        let new_origin = ray.origin - closest_object.center.xyz();
-        closest_hit.p = new_origin + ray.direction * root;
-        // HACK:
-        closest_hit.n = glm::normalize(&closest_hit.p);
-
-        closest_hit.p += closest_object.center.xyz();
-
-        return closest_hit;
     }
 }

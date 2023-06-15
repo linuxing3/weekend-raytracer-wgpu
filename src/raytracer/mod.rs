@@ -1013,6 +1013,7 @@ impl Ray {
     }
 }
 
+#[derive(Clone, Copy)]
 pub struct Intersection {
     p: Vec3,
     n: Vec3,
@@ -1102,6 +1103,38 @@ pub trait ObjectHittable {
         t: f32,
         hit: &mut Intersection,
     ) -> bool;
+}
+
+impl Sphere {
+    pub fn closest_hit<'a>(
+        &'a self,
+        ray: &Ray,
+        tmin: f32,
+        tmax: f32,
+        rec: &'a mut Intersection,
+    ) -> (bool, Option<&mut Intersection>) {
+        let oc = ray.origin - self.center.xyz();
+        let a = dot(&ray.direction, &ray.direction);
+        let half_b = dot(&oc, &ray.direction);
+        let c = dot(&oc, &oc) - self.radius * self.radius;
+        let discriminant = half_b * half_b - a * c;
+        if discriminant < 0.0 {
+            return (false, None);
+        }
+
+        let mut closest_t = (-half_b - num::Float::sqrt(discriminant)) / a;
+        if closest_t < tmin || tmax < closest_t {
+            closest_t = (-half_b + num::Float::sqrt(discriminant)) / a;
+            if closest_t < tmin || tmax < closest_t {
+                return (false, None);
+            }
+        }
+        // next hit
+        rec.t = closest_t;
+        rec.p = ray.origin + ray.direction * rec.t;
+        rec.n = (rec.p - self.center.xyz()).normalize();
+        return (true, Some(rec));
+    }
 }
 
 impl ObjectHittable for Sphere {
