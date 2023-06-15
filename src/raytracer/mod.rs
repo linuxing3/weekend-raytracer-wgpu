@@ -1065,6 +1065,69 @@ pub trait HittableV2 {
     ) -> bool;
 }
 
+impl HittableV2 for Layer {
+    fn trace_ray_v2(
+        &self,
+        ray: &Ray,
+        tmin: f32,
+        tmax: f32,
+        hit: &mut Intersection,
+    ) -> bool {
+        for (object_index, object) in self.world.as_slice().into_iter().enumerate() {
+            if object.trace_ray_v2(&ray, 0.001, hit.t, hit) {
+                let closest_hit = self.closest_hit(&ray, hit.t, object_index);
+                let closest_sphere = object_index;
+                if closest_hit.t >= 0.0 {
+                    return true;
+                };
+            }
+        }
+        false
+    }
+
+    fn get_ray_hit_v2(
+        &self,
+        ray: &Ray,
+        t: f32,
+        hit: &mut Intersection,
+    ) -> bool {
+        if t < 0.0 {
+            return false;
+        }
+        let sphere = self.world[0];
+        // p = ray.at(t)
+        let p = ray.origin + ray.direction * t;
+
+        // normal = P -c
+        // https://raytracing.github.io/images/fig-1.05-sphere-normal.jpg
+        let mut n = (1.0 / sphere.radius) * (p - sphere.center.xyz());
+
+        // front face?
+        let f = glm::dot(&ray.direction, &n) < 0.0;
+        n = match f {
+            true => n.normalize(),
+            false => -(n.normalize()),
+        };
+
+        // ?
+        let theta = acos(&-n.yy()).len() as f32;
+
+        // ?
+        let phi = atan2(&-n.zz(), &n.xx()).len() as f32 + PI;
+
+        // position.u on viewport
+        let u = 0.5 * FRAC_1_PI * phi;
+
+        // position.v on viewport
+        let v = FRAC_1_PI * theta;
+
+        *hit = Intersection { p, n, u, v, t, f };
+
+        true
+    }
+    // add code here
+}
+
 impl HittableV2 for Sphere {
     fn trace_ray_v2(
         &self,

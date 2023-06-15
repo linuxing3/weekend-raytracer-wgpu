@@ -31,11 +31,11 @@ impl Color {
 }
 
 pub struct Layer {
-    texture_id: imgui::TextureId,
+    pub texture_id: imgui::TextureId,
     pub vp_size: [f32; 2],
     imgbuf: *mut XImageBuffer,
     pub camera: GpuCamera,
-    world: Vec<Sphere>,
+    pub world: Vec<Sphere>,
 }
 
 impl Layer {
@@ -206,40 +206,44 @@ impl Layer {
         let u = coord_to_color(x, width);
         let v = coord_to_color(y, height);
 
-        let hit = &mut Intersection::new();
-        // hittable world
-        for object in &self.world {
-            let mut pixel_color = Rgb([0_u8, 0_u8, 0_u8]);
-            // NOTE:: multisampling
-            // https://raytracing.github.io/images/fig-1.07-pixel-samples.jpg
-            let n_samples = render_params.sampling.num_samples_per_pixel;
+        let n_samples = render_params.sampling.num_samples_per_pixel;
+        let n_bounces = render_params.sampling.num_bounces;
 
-            for _s in 0..n_samples * 5 {
-                let (uu, vv) = (u + random_f32(), v + random_f32());
-                // NOTE: make ray from camera eye to sphere
-                // https://raytracing.github.io/images/fig-1.04-ray-sphere.jpg
-                let ray_from_camera = self.camera.make_ray(uu, vv);
+        for b in 0..n_bounces {
+            // hittable world
+            for object in &self.world {
+                let mut pixel_color = Rgb([0_u8, 0_u8, 0_u8]);
+                let test_hit = &mut Intersection::new();
+                // NOTE:: multisampling
+                // https://raytracing.github.io/images/fig-1.07-pixel-samples.jpg
 
-                // HACK:
-                let mut metal_material = Metal {
-                    ray: &ray_from_camera,
-                    albedo: vec3(1.0, 0.85, 0.57),
-                };
-                // material + fuzzy + multisampling
-                let traced_color = ray_color_recursive_mat(
-                    &ray_from_camera,
-                    object,
-                    &mut metal_material,
-                    0.9,
-                    50,
-                    hit,
-                );
+                for _s in 0..n_samples {
+                    let (uu, vv) = (u + random_f32(), v + random_f32());
+                    // NOTE: make ray from camera eye to sphere
+                    // https://raytracing.github.io/images/fig-1.04-ray-sphere.jpg
+                    let ray_from_camera = self.camera.make_ray(uu, vv);
 
-                pixel_color = vec3_to_rgb8(
-                    rgb8_to_vec3(pixel_color)
-                        + adjust_gamma_color(rgb8_to_vec3(traced_color), n_samples),
-                );
-                return pixel_color;
+                    let mut metal_material = Metal {
+                        ray: &ray_from_camera,
+                        albedo: vec3(1.0, 0.85, 0.57),
+                    };
+                    // material + fuzzy + multisampling
+                    // HACK: get closest hit and closest object
+                    let traced_color = ray_color_recursive_mat(
+                        &ray_from_camera,
+                        object,
+                        &mut metal_material,
+                        0.9,
+                        50,
+                        test_hit,
+                    );
+
+                    pixel_color = vec3_to_rgb8(
+                        rgb8_to_vec3(pixel_color)
+                            + adjust_gamma_color(rgb8_to_vec3(traced_color), n_samples),
+                    );
+                    return pixel_color;
+                }
             }
         }
 
@@ -277,6 +281,36 @@ impl Layer {
         t: f32,
     ) -> Vec3 {
         return ray.origin + t * ray.direction;
+    }
+
+    pub fn miss_hit(
+        &self,
+        _ray: &Ray,
+    ) -> Intersection {
+        let mut closest_hit = Intersection::new();
+        closest_hit.t = -1.0;
+        return closest_hit;
+    }
+
+    pub fn closest_hit(
+        &self,
+        ray: &Ray,
+        root: f32,
+        object_index: usize,
+    ) -> Intersection {
+        let mut closest_hit = Intersection::new();
+        closest_hit.t = root;
+
+        let closest_object = self.world.as_slice()[object_index];
+
+        let new_origin = ray.origin - closest_object.center.xyz();
+        closest_hit.p = new_origin + ray.direction * root;
+        // HACK:
+        closest_hit.n = glm::normalize(&closest_hit.p);
+
+        closest_hit.p += closest_object.center.xyz();
+
+        return closest_hit;
     }
 }
 
@@ -422,7 +456,7 @@ fn default_background(ray: &Ray) -> Rgb<u8> {
     let unit_direction = ray.direction.normalize();
     let t = 0.5 * (unit_direction.y + 1.0);
     let start_color_v3 = glm::vec3(1.0, 1.0, 1.0);
-    let end_color_v3 = glm::vec3(0.2, 0.3, 0.3);
+    let end_color_v3 = glm::vec3(0.58, 0.85, 1.0);
     let background_color_v3 = (1.0 - t) * start_color_v3 + t * end_color_v3;
     let background_color = vec3_to_rgb8(255.0 * background_color_v3);
     background_color
