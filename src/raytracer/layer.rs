@@ -257,7 +257,7 @@ impl Layer {
 
         let n_samples = render_params.sampling.num_samples_per_pixel;
         let n_bounces = render_params.sampling.num_bounces;
-        let depth: u32 = 20;
+        let mut depth: u32 = 20;
         let fuzzy = 0.9;
 
         let mut pixel_color = vec3(0.0, 0.0, 0.0);
@@ -276,16 +276,18 @@ impl Layer {
             };
             let mut rec = Intersection::new();
 
-            if self.ray_hit_world(&ray, 0.001, f32::MAX, &mut rec, depth) {
+            if self.ray_hit_world(&ray, 0.001, f32::MAX, &mut rec) {
                 if depth <= 0 {
                     return vec3_to_rgb8(vec3(0.0, 0.0, 0.0));
                 }
+                depth -= 1;
+                // scatter + attenuation + reflect
                 let (attenuation, scattered_ray) = metal_material.scatter(&rec);
-                if self.ray_hit_world(&scattered_ray, 0.001, f32::MAX, &mut rec, depth - 1) {
+                if self.ray_hit_world(&scattered_ray, 0.001, f32::MAX, &mut rec) {
                     let mut sampled_color = rec.n * 255.0 / 2.0;
-                    sampled_color.x *= (attenuation.x * fuzzy);
-                    sampled_color.y *= (attenuation.y * fuzzy);
-                    sampled_color.z *= (attenuation.z * fuzzy);
+                    sampled_color.x *= attenuation.x * fuzzy;
+                    sampled_color.y *= attenuation.y * fuzzy;
+                    sampled_color.z *= attenuation.z * fuzzy;
 
                     pixel_color += sampled_color;
                     return vec3_to_rgb8(pixel_color / 2.0);
@@ -302,7 +304,6 @@ impl Layer {
         tmin: f32,
         tmax: f32,
         rec: &mut Intersection,
-        depth: u32,
     ) -> bool {
         let mut temp_rec = Intersection::new();
         let mut hit_anything = false;
