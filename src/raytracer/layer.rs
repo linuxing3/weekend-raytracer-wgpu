@@ -1,6 +1,6 @@
 use super::{
-    math::*, texture::*, GpuCamera, Hittable, HittableV2, HittableV3, Intersection, Metal, Ray,
-    RenderParams, Scatterable, Sphere,
+    math::*, texture::*, GpuCamera, HittableWorld, Intersection, Metal, Ray, RenderParams,
+    Scatterable, Sphere,
 };
 
 use image::{DynamicImage, ImageBuffer, Rgb};
@@ -208,25 +208,18 @@ impl Layer {
         let (uu, vv) = (u + random_f32(), v + random_f32());
         // NOTE: make ray from camera eye to sphere
         // https://raytracing.github.io/images/fig-1.04-ray-sphere.jpg
-        let ray_from_camera = self.camera.make_ray(uu, vv);
+        let ray = self.camera.make_ray(uu, vv);
 
         let n_samples = render_params.sampling.num_samples_per_pixel;
         let n_bounces = render_params.sampling.num_bounces;
 
         let mut metal_material = Metal {
-            ray: &ray_from_camera,
+            ray: &ray,
             albedo: vec3(1.0, 0.85, 0.57),
         };
-        for b in 0..n_bounces {
-            let test_hit = &mut Intersection::new();
-            return self.trace_ray_v3(
-                &ray_from_camera,
-                0.001,
-                std::f32::MAX,
-                n_samples,
-                &mut metal_material,
-                test_hit,
-            );
+        let test_hit = &mut Intersection::new();
+        for _b in 0..n_bounces {
+            return self.trace_ray_color(&ray, n_samples, &mut metal_material, test_hit);
         }
 
         // when world is empty

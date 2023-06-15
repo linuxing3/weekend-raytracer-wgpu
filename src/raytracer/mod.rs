@@ -1050,39 +1050,19 @@ impl Intersection {
     }
 }
 
-pub trait HittableV2 {
-    fn trace_ray_v2(
+pub trait HittableWorld {
+    fn trace_ray_color(
         &self,
         ray: &Ray,
-        tmin: f32,
-        tmax: f32,
-        hit: &mut Intersection,
-    ) -> bool;
-    fn get_ray_hit_v2(
-        &self,
-        ray: &Ray,
-        t: f32,
-        hit: &mut Intersection,
-    ) -> bool;
-}
-
-pub trait HittableV3 {
-    fn trace_ray_v3(
-        &self,
-        ray: &Ray,
-        tmin: f32,
-        tmax: f32,
         n_samples: u32,
         material: &mut impl Scatterable,
         hit: &mut Intersection,
     ) -> Rgb<u8>;
 }
-impl HittableV3 for Layer {
-    fn trace_ray_v3(
+impl HittableWorld for Layer {
+    fn trace_ray_color(
         &self,
         ray: &Ray,
-        tmin: f32,
-        tmax: f32,
         n_samples: u32,
         material: &mut impl Scatterable,
         hit: &mut Intersection,
@@ -1109,6 +1089,22 @@ impl HittableV3 for Layer {
     }
 }
 
+pub trait HittableV2 {
+    fn trace_ray_v2(
+        &self,
+        ray: &Ray,
+        tmin: f32,
+        tmax: f32,
+        hit: &mut Intersection,
+    ) -> bool;
+    fn ray_hit_info(
+        &self,
+        ray: &Ray,
+        t: f32,
+        hit: &mut Intersection,
+    ) -> bool;
+}
+
 impl HittableV2 for Sphere {
     fn trace_ray_v2(
         &self,
@@ -1132,24 +1128,24 @@ impl HittableV2 for Sphere {
         if discriminant >= 0.0 {
             // NOTE: closet T
             // https://raytracing.github.io/images/fig-1.04-ray-sphere.jpg
-            let mut root = (-half_b - num::Float::sqrt(discriminant)) / a;
+            let mut closest_t = (-half_b - num::Float::sqrt(discriminant)) / a;
 
-            if root < tmax && root > tmin {
-                return self.get_ray_hit_v2(ray, root, hit);
+            if closest_t < tmax && closest_t > tmin {
+                return self.ray_hit_info(ray, closest_t, hit);
             }
 
             // farest T
-            root = (-half_b + num::Float::sqrt(discriminant)) / a;
+            closest_t = (-half_b + num::Float::sqrt(discriminant)) / a;
 
-            if root < tmax && root > tmin {
-                return self.get_ray_hit_v2(ray, root, hit);
+            if closest_t < tmax && closest_t > tmin {
+                return self.ray_hit_info(ray, closest_t, hit);
             }
         }
 
         false
     }
 
-    fn get_ray_hit_v2(
+    fn ray_hit_info(
         &self,
         ray: &Ray,
         t: f32,
@@ -1190,98 +1186,6 @@ impl HittableV2 for Sphere {
         true
     }
     // add code here
-}
-
-pub trait Hittable {
-    fn trace_ray(
-        &self,
-        ray: &Ray,
-        tmin: f32,
-        tmax: f32,
-    ) -> (f32, Intersection);
-    fn get_ray_hit(
-        &self,
-        ray: &Ray,
-        t: f32,
-    ) -> Intersection;
-}
-
-impl Hittable for Sphere {
-    // add code here
-    fn trace_ray(
-        &self,
-        ray: &Ray,
-        tmin: f32,
-        tmax: f32,
-    ) -> (f32, Intersection) {
-        let sphere = *self;
-
-        let oc = ray.origin - sphere.center.xyz();
-
-        let a = dot(&ray.direction, &ray.direction);
-
-        let half_b = dot(&oc, &ray.direction);
-
-        let c = dot(&oc, &oc) - sphere.radius * sphere.radius;
-
-        let discriminant = half_b * half_b - a * c;
-
-        if discriminant >= 0.0 {
-            // NOTE: closet T
-            // https://raytracing.github.io/images/fig-1.04-ray-sphere.jpg
-            let mut root = (-half_b - num::Float::sqrt(discriminant)) / a;
-
-            if root < tmax && root > tmin {
-                let hit = self.get_ray_hit(ray, root);
-                return (root, hit);
-            }
-
-            // farest T
-            root = (-half_b + num::Float::sqrt(discriminant)) / a;
-
-            if root < tmax && root > tmin {
-                let hit = self.get_ray_hit(ray, root);
-                return (root, hit);
-            }
-        }
-
-        return (-1.0, Intersection::new());
-    }
-
-    fn get_ray_hit(
-        &self,
-        ray: &Ray,
-        t: f32,
-    ) -> Intersection {
-        let sphere = *self;
-        // p = ray.at(t)
-        let p = ray.origin + ray.direction * t;
-
-        // normal = P -c
-        // https://raytracing.github.io/images/fig-1.05-sphere-normal.jpg
-        let mut n = (1.0 / sphere.radius) * (p - sphere.center.xyz());
-
-        // front face?
-        let f = glm::dot(&ray.direction, &n) < 0.0;
-        n = match f {
-            true => n.normalize(),
-            false => -(n.normalize()),
-        };
-
-        // ?
-        let theta = acos(&-n.yy()).len() as f32;
-
-        // ?
-        let phi = atan2(&-n.zz(), &n.xx()).len() as f32 + PI;
-
-        // position.u on viewport
-        let u = 0.5 * FRAC_1_PI * phi;
-
-        // position.v on viewport
-        let v = FRAC_1_PI * theta;
-
-        return Intersection { p, n, u, v, t, f };
-    }
 }
 
 pub struct Scatter {
@@ -1327,93 +1231,6 @@ impl<'a> Scatterable for Metal<'a> {
         }
         return (vec3(0.0, 0.0, 0.0), ray_scattered);
     }
-}
-
-/**
- *
- * Calculate the color of ray tracing, considering the followings:
- * 1. multitimes bouncing
- * 2. send ray from eye
- * 3. hit the sphere at, got intersection (point vector, normal vector, etc.)
- * 4. resend ray from p to unit sphere with normal vector lenght as radius
- * 5. convert normal plus other physical factors to get final color
- *
- * @params
- *
- * @ray:   the entre ray
- * @world: a impl Hittable, which can be hit by ray
- * @depth: limit ray bouncing times
- */
-fn ray_color(
-    mut ray: &Ray,
-    world: &impl Hittable,
-    depth: u8,
-) -> Rgb<u8> {
-    let (_camera_root, camera_hit) = world.trace_ray(&ray, 0.0, num::Float::max_value());
-
-    // NOTE: difussion
-    // https://raytracing.github.io/images/fig-1.09-rand-vec.jpg
-    let target = camera_hit.p + camera_hit.n + random_in_unit_sphere();
-    let mut unit_ray_from_p = Ray::new(camera_hit.p, target - camera_hit.p);
-
-    // NOTE:
-    // make ray from camera-sphere hitting point
-    // to some random point in the unit_normal_sphere
-    let (_unit_root, unit_hit) =
-        world.trace_ray(&mut unit_ray_from_p, 0.0, num::Float::max_value());
-    let n_normal = unit_hit.n;
-
-    let ray_color = rgb8_from_vec3([
-        0.5 * (n_normal.x + 1.0),
-        0.5 * (n_normal.y + 1.0),
-        0.5 * (n_normal.z + 1.0),
-    ]);
-    let background_color = rgb8_from_vec3([n_normal.x * 0.5, n_normal.y * 0.5, n_normal.z * 0.5]);
-    if camera_hit.t >= 0.0 {
-        return ray_color;
-    } else {
-        return background_color;
-    }
-}
-
-/**
- *
- * Calculate the color of ray tracing, considering the followings:
- * 1. multitimes bouncing
- * 2. send ray from eye
- * 3. hit the sphere at, got intersection (point vector, normal vector, etc.)
- * 4. recursively send ray for sampling times, from p to unit sphere with normal vector lenght as radius
- * 5. convert normal plus other physical factors to get final color
- *
- * @params
- *
- * @ray:   the entre ray
- * @world: a impl Hittable, which can be hit by ray
- * @depth: limit ray bouncing times
- */
-fn ray_color_recursive(
-    ray: &Ray,
-    world: &impl Hittable,
-    depth: u8,
-) -> Rgb<u8> {
-    if depth <= 0 {
-        return Rgb([0, 0, 0]);
-    };
-
-    // lerp ray tracing color
-    let (root, hit) = world.trace_ray(ray, 0.001, num::Float::max_value());
-
-    if root >= 0.0 {
-        // uniform scatter direction for all angles away from the hit point
-        let target = hit.p + hit.n + random_in_hemisphere(hit.n);
-        let unit_ray_from_p = Ray::new(hit.p, target - hit.p);
-        return vec3_to_rgb8(
-            0.5 * rgb8_to_vec3(ray_color_recursive(&unit_ray_from_p, world, depth - 1)),
-        );
-    }
-
-    // lerp background color
-    return default_background(ray);
 }
 
 /**
@@ -1471,7 +1288,7 @@ pub fn default_background(ray: &Ray) -> Rgb<u8> {
     let unit_direction = ray.direction.normalize();
     let t = 0.5 * (unit_direction.y + 1.0);
     let start_color_v3 = glm::vec3(1.0, 1.0, 1.0);
-    let end_color_v3 = glm::vec3(0.58, 0.85, 1.0);
+    let end_color_v3 = glm::vec3(0.08, 0.05, 0.02);
     let background_color_v3 = (1.0 - t) * start_color_v3 + t * end_color_v3;
     let background_color = vec3_to_rgb8(255.0 * background_color_v3);
     background_color
