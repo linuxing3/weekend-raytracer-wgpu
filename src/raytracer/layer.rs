@@ -206,8 +206,6 @@ impl Layer {
         let u = coord_to_color(x, width);
         let v = coord_to_color(y, height);
         let (uu, vv) = (u + random_f32(), v + random_f32());
-        // NOTE: make ray from camera eye to sphere
-        // https://raytracing.github.io/images/fig-1.04-ray-sphere.jpg
         let ray = self.camera.make_ray(uu, vv);
 
         let n_samples = render_params.sampling.num_samples_per_pixel;

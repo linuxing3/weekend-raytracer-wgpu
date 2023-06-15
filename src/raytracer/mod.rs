@@ -1067,30 +1067,29 @@ impl HittableWorld for Layer {
         material: &mut impl Scatterable,
         hit: &mut Intersection,
     ) -> Rgb<u8> {
+        let mut pixel_color = Rgb([0_u8, 0_u8, 0_u8]);
+        let mut throught_color = Rgb([55_u8, 55_u8, 55_u8]);
         for (_i, object) in self.world.as_slice().into_iter().enumerate() {
-            let mut pixel_color = Rgb([0_u8, 0_u8, 0_u8]);
-
-            for _s in 0..n_samples {
-                let traced_color = ray_color_recursive_mat(&ray, object, material, 0.9, 50, hit);
-
-                pixel_color = vec3_to_rgb8(
-                    rgb8_to_vec3(pixel_color)
-                        + adjust_gamma_color(rgb8_to_vec3(traced_color), n_samples),
-                );
-                // return pixel_color;
+            let real_samples = n_samples;
+            for _s in 0..real_samples {
+                let traced_color = ray_color(&ray, object, material, 0.5, 50, hit);
+                // BUG: no gamma correction
+                pixel_color = vec3_to_rgb8(rgb8_to_vec3(pixel_color) + rgb8_to_vec3(traced_color));
+                throught_color =
+                    vec3_to_rgb8(rgb8_to_vec3(throught_color) - rgb8_to_vec3(traced_color));
             }
 
             if hit.t >= 0.0 {
                 return pixel_color;
             }
-            return default_background(ray);
+            return throught_color;
         }
-        return default_background(ray);
+        return throught_color;
     }
 }
 
-pub trait HittableV2 {
-    fn trace_ray_v2(
+pub trait ObjectHittable {
+    fn closest_object_hit(
         &self,
         ray: &Ray,
         tmin: f32,
@@ -1105,8 +1104,8 @@ pub trait HittableV2 {
     ) -> bool;
 }
 
-impl HittableV2 for Sphere {
-    fn trace_ray_v2(
+impl ObjectHittable for Sphere {
+    fn closest_object_hit(
         &self,
         ray: &Ray,
         tmin: f32,
@@ -1250,22 +1249,22 @@ impl<'a> Scatterable for Metal<'a> {
  * @fuzzy:    fuzzy reflection factor
  * @depth: limit ray bouncing times
  */
-pub fn ray_color_recursive_mat(
+pub fn ray_color(
     ray: &Ray,
-    object: &impl HittableV2,
+    object: &impl ObjectHittable,
     material: &mut impl Scatterable,
     fuzzy: f32,
     depth: u8,
     hit: &mut Intersection,
 ) -> Rgb<u8> {
     if depth <= 0 {
-        return default_background(ray);
+        return Rgb([0, 0, 0]);
     };
 
     // lerp ray tracing color
-    if object.trace_ray_v2(&ray, 0.001, hit.t, hit) {
+    if object.closest_object_hit(&ray, 0.001, hit.t, hit) {
         let (attenuation, scattered) = material.scatter(&hit);
-        let mut color_v = rgb8_to_vec3(ray_color_recursive_mat(
+        let mut color_v = rgb8_to_vec3(ray_color(
             &scattered,
             object,
             material,
@@ -1287,7 +1286,7 @@ pub fn ray_color_recursive_mat(
 pub fn default_background(ray: &Ray) -> Rgb<u8> {
     let unit_direction = ray.direction.normalize();
     let t = 0.5 * (unit_direction.y + 1.0);
-    let start_color_v3 = glm::vec3(1.0, 1.0, 1.0);
+    let start_color_v3 = glm::vec3(0.6, 0.6, 0.75);
     let end_color_v3 = glm::vec3(0.08, 0.05, 0.02);
     let background_color_v3 = (1.0 - t) * start_color_v3 + t * end_color_v3;
     let background_color = vec3_to_rgb8(255.0 * background_color_v3);
