@@ -44,8 +44,6 @@ impl Texture {
             })
             .collect();
 
-        println!("SliceF32Array Size: {}", data.as_slice().len());
-
         Ok(Self { dimensions, data })
     }
 

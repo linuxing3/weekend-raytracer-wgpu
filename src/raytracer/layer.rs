@@ -1,8 +1,8 @@
 use std::ops::DerefMut;
 
 use super::{
-    math::*, texture::*, GpuCamera, Intersection, Material, Metal, Ray, RenderParams, Scatter,
-    Scatterable, Scene, Sphere,
+    gpu_buffer::StorageBuffer, math::*, texture::*, GpuCamera, GpuMaterial, Intersection, Material,
+    Metal, Ray, RenderParams, Scatter, Scatterable, Scene, Sphere,
 };
 
 use image::{DynamicImage, ImageBuffer, Rgb};
@@ -108,6 +108,49 @@ impl Layer {
         ];
 
         Scene { spheres, materials }
+    }
+
+    pub fn register_texture_list(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        renderer: &mut imgui_wgpu::Renderer,
+    ) -> Option<TextureId> {
+        let [width, height] = self.vp_size;
+
+        let size = wgpu::Extent3d {
+            width: width as u32,
+            height: height as u32,
+            depth_or_array_layers: 1,
+        };
+        let mut global_texture_data: Vec<[f32; 3]> = Vec::new();
+
+        let mut material_data: Vec<GpuMaterial> = Vec::with_capacity(self.materials.len());
+
+        for material in self.materials.iter() {
+            let gpu_material = match material {
+                Material::Lambertian { albedo } => {
+                    GpuMaterial::lambertian(albedo, &mut global_texture_data)
+                }
+                Material::Metal { albedo, fuzz } => {
+                    GpuMaterial::metal(albedo, *fuzz, &mut global_texture_data)
+                }
+                Material::Dielectric { refraction_index } => {
+                    GpuMaterial::dielectric(*refraction_index)
+                }
+                Material::Checkerboard { odd, even } => {
+                    GpuMaterial::checkerboard(odd, even, &mut global_texture_data)
+                }
+            };
+
+            material_data.push(gpu_material);
+            let raw_data = bytemuck::cast_slice(global_texture_data.as_slice());
+            let imgui_texture =
+                WgpuTexture::new_imgui_texture(&device, &queue, &renderer, &raw_data, size);
+            let texture_id = renderer.textures.insert(imgui_texture);
+        }
+
+        Some(self.texture_id)
     }
 
     pub fn register_texture(
