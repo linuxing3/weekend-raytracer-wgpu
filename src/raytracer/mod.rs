@@ -1052,6 +1052,47 @@ impl Intersection {
 }
 
 impl Sphere {
+    pub fn closest_hit_2<'a>(
+        &'a self,
+        ray: &Ray,
+        tmin: f32,
+        tmax: f32,
+        rec: *mut Intersection,
+    ) -> (bool, Option<*mut Intersection>) {
+        unsafe {
+            let oc = ray.origin - self.center.xyz();
+            let a = dot(&ray.direction, &ray.direction);
+            let half_b = dot(&oc, &ray.direction);
+            let c = dot(&oc, &oc) - self.radius * self.radius;
+            let discriminant = half_b * half_b - a * c;
+            if discriminant < 0.0 {
+                return (false, None);
+            }
+
+            let mut closest_t = (-half_b - num::Float::sqrt(discriminant)) / a;
+            if closest_t < tmin || tmax < closest_t {
+                closest_t = (-half_b + num::Float::sqrt(discriminant)) / a;
+                if closest_t < tmin || tmax < closest_t {
+                    return (false, None);
+                }
+            }
+            // update hit intersect info
+            (*rec).t = closest_t;
+            (*rec).p = ray.origin + ray.direction * (*rec).t;
+            let n = (*rec).p - self.center.xyz();
+            (*rec).f = dot(&ray.direction, &n) < 0.0;
+            (*rec).n = match (*rec).f {
+                true => n.normalize(),
+                false => -(n.normalize()),
+            };
+            let theta = acos(&-n.yy()).len() as f32;
+            let phi = atan2(&-n.zz(), &n.xx()).len() as f32 + PI;
+            (*rec).u = 0.5 * FRAC_1_PI * phi;
+            (*rec).v = FRAC_1_PI * theta;
+
+            return (true, Some(rec));
+        }
+    }
     pub fn closest_hit<'a>(
         &'a self,
         ray: &Ray,
@@ -1151,6 +1192,10 @@ pub trait Scatterable {
         &mut self,
         rec: &Intersection,
     ) -> (Vec3, Ray);
+    fn scatter_raw(
+        &mut self,
+        rec: *mut Intersection,
+    ) -> (Vec3, Ray);
 }
 
 impl<'a> Scatterable for Scatter<'a> {
@@ -1163,6 +1208,12 @@ impl<'a> Scatterable for Scatter<'a> {
         let ray_scattered = Ray::new(self.ray.origin, scatter_direction);
         let attenuation = self.albedo;
         (attenuation, ray_scattered)
+    }
+    fn scatter_raw(
+        &mut self,
+        rec: *mut Intersection,
+    ) -> (Vec3, Ray) {
+        unimplemented!();
     }
 }
 
@@ -1179,6 +1230,20 @@ impl<'a> Scatterable for Metal<'a> {
             return (attenuation, ray_scattered);
         }
         return (vec3(0.0, 0.0, 0.0), ray_scattered);
+    }
+    fn scatter_raw(
+        &mut self,
+        rec: *mut Intersection,
+    ) -> (Vec3, Ray) {
+        unsafe {
+            let reflected = reflect(unit_vertor(self.ray.direction), (*rec).n);
+            let ray_scattered = Ray::new((*rec).p, reflected);
+            let attenuation = self.albedo;
+            if dot(&ray_scattered.direction, &(*rec).n) > 0.0 {
+                return (attenuation, ray_scattered);
+            }
+            return (vec3(0.0, 0.0, 0.0), ray_scattered);
+        }
     }
 }
 

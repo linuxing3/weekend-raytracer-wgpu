@@ -37,7 +37,7 @@ pub struct Layer {
     pub vp_size: [f32; 2],
     imgbuf: *mut XImageBuffer,
     pub camera: GpuCamera,
-    pub world: Vec<Sphere>,
+    pub world: Vec<Box<Sphere>>,
     pub materials: Vec<Material>,
 }
 
@@ -57,7 +57,10 @@ impl Layer {
 
         // Generating hittable objects
         let scene = Self::scene();
-        let world = scene.spheres;
+        let world = scene.spheres[..]
+            .into_iter()
+            .map(|s| Box::new(s.clone()))
+            .collect();
         let materials = scene.materials;
 
         let texture_id = TextureId::new(0);
@@ -274,23 +277,27 @@ impl Layer {
                 ray: &ray,
                 albedo: vec3(1.0, 0.85, 0.57),
             };
-            let mut rec = Intersection::new();
+            let rec = Box::into_raw(Box::new(Intersection::new()));
 
-            if self.ray_hit_world(&ray, 0.001, f32::MAX, &mut rec) {
+            // if self.ray_hit_world(&ray, 0.001, f32::MAX, &mut rec) {
+            if self.ray_hit_world_raw(&ray, self.world.clone(), 0.001, f32::MAX, rec) {
                 if depth <= 0 {
                     return vec3_to_rgb8(vec3(0.0, 0.0, 0.0));
                 }
                 depth -= 1;
                 // scatter + attenuation + reflect
-                let (attenuation, scattered_ray) = metal_material.scatter(&rec);
-                if self.ray_hit_world(&scattered_ray, 0.001, f32::MAX, &mut rec) {
-                    let mut sampled_color = rec.n * 255.0 / 2.0;
-                    sampled_color.x *= attenuation.x * fuzzy;
-                    sampled_color.y *= attenuation.y * fuzzy;
-                    sampled_color.z *= attenuation.z * fuzzy;
+                let (attenuation, scattered_ray) = metal_material.scatter_raw(rec);
+                if self.ray_hit_world_raw(&scattered_ray, self.world.clone(), 0.001, f32::MAX, rec)
+                {
+                    unsafe {
+                        let mut sampled_color = (*rec).n * 255.0 / 2.0;
+                        sampled_color.x *= attenuation.x * fuzzy;
+                        sampled_color.y *= attenuation.y * fuzzy;
+                        sampled_color.z *= attenuation.z * fuzzy;
 
-                    pixel_color += sampled_color;
-                    return vec3_to_rgb8(pixel_color / 2.0);
+                        pixel_color += sampled_color;
+                        return vec3_to_rgb8(pixel_color / 2.0);
+                    }
                 }
             };
         }
@@ -320,6 +327,32 @@ impl Layer {
         }
 
         return hit_anything;
+    }
+
+    pub fn ray_hit_world_raw(
+        &mut self,
+        ray: &Ray,
+        world: Vec<Box<Sphere>>,
+        tmin: f32,
+        tmax: f32,
+        rec: *mut Intersection,
+    ) -> bool {
+        unsafe {
+            let mut temp_rec = Intersection::new();
+            let mut hit_anything = false;
+            let mut closest_hit = tmax;
+            let old_hit = (*rec).t;
+
+            for object in world[..].into_iter() {
+                let result = object.closest_hit_2(&ray, tmin, closest_hit, &mut temp_rec);
+                if result.0 {
+                    hit_anything = true;
+                    closest_hit = old_hit;
+                    *rec = *(result.1.unwrap());
+                }
+            }
+            return hit_anything;
+        }
     }
 
     pub fn set_pixel_with_art_style(
