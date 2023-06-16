@@ -1,8 +1,9 @@
 use std::ops::DerefMut;
 
 use super::{
-    gpu_buffer::StorageBuffer, math::*, texture::*, GpuCamera, GpuMaterial, Intersection, Material,
-    Metal, Ray, RenderParams, Scatter, Scatterable, Scene, Sphere,
+    gpu_buffer::StorageBuffer, math::*, texture::*, texture_lookup, GpuCamera, GpuMaterial,
+    Intersection, Material, Metal, Ray, RenderParams, Scatter, Scatterable, Scene, Sphere,
+    TextureDescriptor,
 };
 
 use image::{DynamicImage, ImageBuffer, Rgb};
@@ -144,12 +145,21 @@ impl Layer {
             };
 
             material_data.push(gpu_material);
-            let raw_data = bytemuck::cast_slice(global_texture_data.as_slice());
-            let imgui_texture =
-                WgpuTexture::new_imgui_texture(&device, &queue, &renderer, &raw_data, size);
-            let texture_id = renderer.textures.insert(imgui_texture);
         }
 
+        // GPUMaterial -> Texture
+        // 1. sphere = spheres[idx];
+        // 2. materialIdx = sphere.materialIdx;
+        // 3. material = materials[materialIdx];
+        // 4. switch material.id
+        //         let texture = material.desc1;
+        //         register texture
+        // 5. albedo = textureLookup(texture, hit.u, hit.v);
+
+        // let raw_data = bytemuck::cast_slice(global_texture_data.as_slice());
+        // let imgui_texture =
+        //     WgpuTexture::new_imgui_texture(&device, &queue, &renderer, &raw_data, size);
+        // let texture_id = renderer.textures.insert(imgui_texture);
         Some(self.texture_id)
     }
 

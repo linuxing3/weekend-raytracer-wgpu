@@ -837,7 +837,7 @@ impl GpuMaterial {
 #[repr(C)]
 #[derive(Clone, Copy, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 
-struct TextureDescriptor {
+pub struct TextureDescriptor {
     width: u32,
     height: u32,
     offset: u32,
@@ -961,7 +961,7 @@ const VERTICES: &[Vertex] = &[
 ];
 
 // from wgsl
-fn texture_lookup(
+pub fn texture_lookup(
     desc: TextureDescriptor,
     textures: &[[f32; 3]],
     u: f32,
