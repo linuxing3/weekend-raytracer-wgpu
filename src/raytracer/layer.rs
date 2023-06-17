@@ -354,9 +354,9 @@ impl Layer {
                 ) {
                     unsafe {
                         let mut sampled_color = (*rec).n * 255.0 / 2.0;
-                        sampled_color.x *= unsafe { (*attenuation).x * fuzzy };
-                        sampled_color.y *= unsafe { (*attenuation).y * fuzzy };
-                        sampled_color.z *= unsafe { (*attenuation).z * fuzzy };
+                        sampled_color.x *= (*attenuation).x * fuzzy;
+                        sampled_color.y *= (*attenuation).y * fuzzy;
+                        sampled_color.z *= (*attenuation).z * fuzzy;
 
                         pixel_color += sampled_color;
                         return vec3_to_rgb8(pixel_color / 2.0);
