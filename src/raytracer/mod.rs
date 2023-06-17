@@ -961,6 +961,9 @@ const VERTICES: &[Vertex] = &[
 ];
 
 // from wgsl
+/**
+* lookup a per pixel texture from global textures vector
+ */
 pub fn texture_lookup(
     desc: TextureDescriptor,
     textures: &[[f32; 3]],
@@ -1195,7 +1198,9 @@ pub trait Scatterable {
     fn scatter_raw(
         &mut self,
         rec: *mut Intersection,
-    ) -> (Vec3, Ray);
+        attenuation: *mut Vec3,
+        ray_scattered: *mut Ray,
+    ) -> bool;
 }
 
 impl<'a> Scatterable for Scatter<'a> {
@@ -1212,8 +1217,19 @@ impl<'a> Scatterable for Scatter<'a> {
     fn scatter_raw(
         &mut self,
         rec: *mut Intersection,
-    ) -> (Vec3, Ray) {
-        unimplemented!();
+        attenuation: *mut Vec3,
+        ray_scattered: *mut Ray,
+    ) -> bool {
+        unsafe {
+            let scatter_direction = (*rec).p - random_unit_vector();
+            let mut temp_ray = Ray::new(self.ray.origin, scatter_direction);
+            let mut temp_attenuation = self.albedo;
+            *attenuation = *&temp_attenuation;
+            (*ray_scattered).origin = temp_ray.origin;
+            (*ray_scattered).direction = temp_ray.direction;
+
+            true
+        }
     }
 }
 
@@ -1234,15 +1250,20 @@ impl<'a> Scatterable for Metal<'a> {
     fn scatter_raw(
         &mut self,
         rec: *mut Intersection,
-    ) -> (Vec3, Ray) {
+        attenuation: *mut Vec3,
+        ray_scattered: *mut Ray,
+    ) -> bool {
         unsafe {
             let reflected = reflect(unit_vertor(self.ray.direction), (*rec).n);
-            let ray_scattered = Ray::new((*rec).p, reflected);
-            let attenuation = self.albedo;
-            if dot(&ray_scattered.direction, &(*rec).n) > 0.0 {
-                return (attenuation, ray_scattered);
+            let mut temp_ray = Ray::new((*rec).p, reflected);
+            let mut temp_attenuation = self.albedo;
+            *attenuation = *&temp_attenuation;
+            (*ray_scattered).origin = temp_ray.origin;
+            (*ray_scattered).direction = temp_ray.direction;
+            if dot(&(*ray_scattered).direction, &(*rec).n) > 0.0 {
+                return true;
             }
-            return (vec3(0.0, 0.0, 0.0), ray_scattered);
+            return false;
         }
     }
 }

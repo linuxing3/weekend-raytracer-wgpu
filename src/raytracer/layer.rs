@@ -339,14 +339,24 @@ impl Layer {
                 }
                 depth -= 1;
                 // scatter + attenuation + reflect
-                let (attenuation, scattered_ray) = metal_material.scatter_raw(rec);
-                if self.ray_hit_world_raw(&scattered_ray, self.world.clone(), 0.001, f32::MAX, rec)
-                {
+                // let (attenuation, scattered_ray) = metal_material.scatter_raw(rec);
+                let scattered_ray = Box::into_raw(Box::new(Ray::new_from_xy(0.0, 0.0)));
+                let attenuation = Box::into_raw(Box::from(vec3(0.0, 0.0, 0.0)));
+                if !metal_material.scatter_raw(rec, attenuation, scattered_ray) {
+                    return vec3_to_rgb8(vec3(0.0, 0.0, 0.0));
+                };
+                if self.ray_hit_world_raw(
+                    unsafe { &(*scattered_ray) },
+                    self.world.clone(),
+                    0.001,
+                    f32::MAX,
+                    rec,
+                ) {
                     unsafe {
                         let mut sampled_color = (*rec).n * 255.0 / 2.0;
-                        sampled_color.x *= attenuation.x * fuzzy;
-                        sampled_color.y *= attenuation.y * fuzzy;
-                        sampled_color.z *= attenuation.z * fuzzy;
+                        sampled_color.x *= unsafe { (*attenuation).x * fuzzy };
+                        sampled_color.y *= unsafe { (*attenuation).y * fuzzy };
+                        sampled_color.z *= unsafe { (*attenuation).z * fuzzy };
 
                         pixel_color += sampled_color;
                         return vec3_to_rgb8(pixel_color / 2.0);
