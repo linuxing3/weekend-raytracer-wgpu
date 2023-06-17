@@ -119,9 +119,10 @@ fn main() {
         &render_params,
     );
 
-    layer.set_data(&render_params);
-
-    layer.register_texture(&context.device, &context.queue, &mut imgui_renderer);
+    if layer.set_global_data() {
+        layer.set_data(&render_params);
+        layer.register_texture(&context.device, &context.queue, &mut imgui_renderer);
+    };
 
     event_loop.run(move |event, _, _control_flow| {
         imgui_platform.handle_event(imgui.io_mut(), &window, &event);
