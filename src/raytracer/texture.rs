@@ -31,8 +31,6 @@ impl Texture {
 
         let dimensions = pixels.dimensions();
 
-        println!("w{} h{}", dimensions.0, dimensions.1);
-
         let data: Vec<_> = pixels
             .pixels()
             .map(|p| -> [f32; 3] {
