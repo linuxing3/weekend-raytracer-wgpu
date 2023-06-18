@@ -1,8 +1,9 @@
 use std::ops::DerefMut;
 
 use super::{
-    math::*, scatter_metal, texture::*, texture_lookup, GpuCamera, GpuMaterial, Intersection,
-    Material, Metal, Ray, RenderParams, Scatterable, Scene, Sphere,
+    math::*, scatter_lambertian, scatter_metal, texture::*, texture_lookup, GpuCamera, GpuMaterial,
+    Intersection, Material, Metal, Ray, RenderParams, Scatterable, Scene, Sphere,
+    TextureDescriptor,
 };
 
 use image::{DynamicImage, ImageBuffer, Rgb};
@@ -143,6 +144,9 @@ impl Layer {
 
             self.material_data.push(gpu_material);
         }
+
+        println!("Materials: {}", self.materials.len());
+        println!("Textures:  {}", self.global_texture_data.len());
 
         true
     }
@@ -340,19 +344,22 @@ impl Layer {
                 let scattered_ray = Box::into_raw(Box::new(Ray::new_from_xy(0.0, 0.0)));
 
                 unsafe {
-                    // let index = (*rec).m as usize;
-                    //
-                    let index = 2;
+                    let mut texture = TextureDescriptor::empty();
+                    let mut fuzzy = 0_f32;
+                    let mut albedo = Vec3::zeros();
 
-                    let texture = self.material_data[index].desc1;
-
-                    let fuzzy = self.material_data[2].x;
-
-                    let albedo = texture_lookup(texture, &self.global_texture_data, uu, vv);
-
-                    if !scatter_metal(&ray, rec, scattered_ray) {
-                        return vec3_to_rgb8(vec3(0.0, 0.0, 0.0));
-                    };
+                    if scatter_metal(&ray, rec, scattered_ray) {
+                        texture = self.material_data[2].desc1;
+                        fuzzy = self.material_data[2].x;
+                        albedo =
+                            texture_lookup(texture, &self.global_texture_data, (*rec).u, (*rec).v);
+                    }
+                    // if scatter_lambertian(&ray, rec, scattered_ray) {
+                    //     texture = self.material_data[1].desc1;
+                    //     fuzzy = self.material_data[1].x;
+                    //     albedo =
+                    //         texture_lookup(texture, &self.global_texture_data, (*rec).u, (*rec).v);
+                    // }
 
                     if self.ray_hit_world_raw(
                         &(*scattered_ray),
@@ -362,12 +369,9 @@ impl Layer {
                         rec,
                     ) {
                         let mut sampled_color = (*rec).n.normalize() * 255.0 / 2.0;
-
-                        sampled_color.x *= (*albedo).x * fuzzy;
-
-                        sampled_color.y *= (*albedo).y * fuzzy;
-
-                        sampled_color.z *= (*albedo).z * fuzzy;
+                        // sampled_color.x *= (*albedo).x * fuzzy;
+                        // sampled_color.y *= (*albedo).y * fuzzy;
+                        // sampled_color.z *= (*albedo).z * fuzzy;
 
                         pixel_color += sampled_color;
 
@@ -430,12 +434,9 @@ impl Layer {
             for object in world[..].into_iter() {
                 let result = object.closest_hit_raw(&ray, tmin, closest_hit, &mut temp_rec);
 
-                if result.0 {
+                if result {
                     hit_anything = true;
-
                     closest_hit = old_hit;
-
-                    *rec = *(result.1.unwrap());
                 }
             }
 

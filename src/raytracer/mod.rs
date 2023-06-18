@@ -1124,7 +1124,7 @@ impl Sphere {
         tmin: f32,
         tmax: f32,
         rec: *mut Intersection,
-    ) -> (bool, Option<*mut Intersection>) {
+    ) -> bool {
         unsafe {
             let oc = ray.origin - self.0.xyz();
 
@@ -1137,7 +1137,7 @@ impl Sphere {
             let discriminant = half_b * half_b - a * c;
 
             if discriminant < 0.0 {
-                return (false, None);
+                return false;
             }
 
             let mut closest_t = (-half_b - num::Float::sqrt(discriminant)) / a;
@@ -1146,13 +1146,13 @@ impl Sphere {
                 closest_t = (-half_b + num::Float::sqrt(discriminant)) / a;
 
                 if closest_t < tmin || tmax < closest_t {
-                    return (false, None);
+                    return false;
                 }
             }
 
             self.update_ray_hit_info(&ray, closest_t, &mut (*rec));
 
-            return (true, Some(rec));
+            return true;
         }
     }
 
@@ -1218,26 +1218,26 @@ impl Sphere {
         &self,
         ray: &Ray,
         t: f32,
-        hit: &mut Intersection,
+        rec: &mut Intersection,
     ) -> bool {
         if t < 0.0 {
             return false;
         }
 
-        (*hit).m = self.2;
+        (*rec).m = self.2;
         // p = ray.at(t)
-        (*hit).p = ray.origin + ray.direction * t;
+        (*rec).p = ray.origin + ray.direction * t;
 
         // normal = P -c
         // https://raytracing.github.io/images/fig-1.05-sphere-normal.jpg
-        let n = (1.0 / self.1) * ((*hit).p - self.0.xyz());
-        hit.set_face_normal(ray, n);
+        let n = (1.0 / self.1) * ((*rec).p - self.0.xyz());
+        rec.set_face_normal(ray, n);
 
         // ?
         let theta = acos(&-n.yy()).len() as f32;
         let phi = atan2(&-n.zz(), &n.xx()).len() as f32 + PI;
-        (*hit).u = 0.5 * FRAC_1_PI * phi;
-        (*hit).v = FRAC_1_PI * theta;
+        (*rec).u = 0.5 * FRAC_1_PI * phi;
+        (*rec).v = FRAC_1_PI * theta;
 
         true
     }
