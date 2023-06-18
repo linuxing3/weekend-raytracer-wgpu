@@ -1299,7 +1299,7 @@ fn scatter_metal(
         return false;
     }
     unsafe {
-        let reflected = reflect(unit_vertor(ray.direction), (*rec).n);
+        let reflected = reflect(unit_vertor(ray.direction), (*rec).n.normalize());
 
         let temp_ray = Ray::new((*rec).p, reflected);
 

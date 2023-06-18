@@ -1,4 +1,4 @@
-use std::ops::DerefMut;
+use std::{cmp::max, ops::DerefMut};
 
 use super::{
     math::*, scatter_lambertian, scatter_metal, texture::*, texture_lookup, GpuCamera, GpuMaterial,
@@ -8,7 +8,7 @@ use super::{
 
 use image::{DynamicImage, ImageBuffer, Rgb};
 use imgui::TextureId;
-use nalgebra_glm::{vec3, Vec3};
+use nalgebra_glm::{dot, normalize, vec3, Vec3};
 
 pub struct Color {
     data: Vec3,
@@ -321,6 +321,8 @@ impl Layer {
 
         let mut depth: u32 = 20;
 
+        let multipler = 0.5;
+
         let mut pixel_color = vec3(0.0, 0.0, 0.0);
 
         // sampleing
@@ -354,6 +356,15 @@ impl Layer {
                         albedo =
                             texture_lookup(texture, &self.global_texture_data, (*rec).u, (*rec).v);
                     }
+
+                    let light_dir = vec3(5.0, -3.0, 2.0).normalize();
+                    let light_dir_rev = (*rec).p - light_dir;
+                    let mut light_theta = dot(&(*rec).n, &light_dir_rev);
+                    if light_theta < 0.0 {
+                        light_theta = 0.0
+                    };
+                    // let light_intensity = max(light_theta, 0_f32);
+
                     // if scatter_lambertian(&ray, rec, scattered_ray) {
                     //     texture = self.material_data[1].desc1;
                     //     fuzzy = self.material_data[1].x;
@@ -373,7 +384,7 @@ impl Layer {
                         sampled_color.y *= (*albedo).y * fuzzy;
                         sampled_color.z *= (*albedo).z * fuzzy;
 
-                        pixel_color += sampled_color;
+                        pixel_color += multipler * sampled_color;
 
                         return vec3_to_rgb8(pixel_color);
                     }
@@ -431,7 +442,7 @@ impl Layer {
 
             let old_hit = (*rec).t;
 
-            for object in world[..].into_iter() {
+            for (index, object) in world[..].into_iter().enumerate() {
                 if object.closest_hit_raw(&ray, tmin, closest_hit, &mut temp_rec) {
                     hit_anything = true;
                     closest_hit = old_hit;
