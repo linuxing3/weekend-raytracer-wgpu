@@ -369,9 +369,9 @@ impl Layer {
                         rec,
                     ) {
                         let mut sampled_color = (*rec).n.normalize() * 255.0 / 2.0;
-                        // sampled_color.x *= (*albedo).x * fuzzy;
-                        // sampled_color.y *= (*albedo).y * fuzzy;
-                        // sampled_color.z *= (*albedo).z * fuzzy;
+                        sampled_color.x *= (*albedo).x * fuzzy;
+                        sampled_color.y *= (*albedo).y * fuzzy;
+                        sampled_color.z *= (*albedo).z * fuzzy;
 
                         pixel_color += sampled_color;
 
@@ -432,11 +432,10 @@ impl Layer {
             let old_hit = (*rec).t;
 
             for object in world[..].into_iter() {
-                let result = object.closest_hit_raw(&ray, tmin, closest_hit, &mut temp_rec);
-
-                if result {
+                if object.closest_hit_raw(&ray, tmin, closest_hit, &mut temp_rec) {
                     hit_anything = true;
                     closest_hit = old_hit;
+                    *rec = temp_rec;
                 }
             }
 

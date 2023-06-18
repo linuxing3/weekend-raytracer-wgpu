@@ -1067,15 +1067,15 @@ pub struct Intersection {
 
 impl Intersection {
     pub fn new() -> Self {
-        let p: Vec3 = glm::vec3(0.0, 0.0, 0.0);
+        let p: Vec3 = Vec3::zeros();
 
-        let n: Vec3 = glm::vec3(0.0, 0.0, 0.0);
+        let n: Vec3 = Vec3::zeros();
 
         let u: f32 = 0.0;
 
         let v: f32 = 0.0;
 
-        let t: f32 = std::f32::MAX;
+        let t: f32 = 0.0;
 
         let f: bool = false;
 
@@ -1187,6 +1187,7 @@ impl Sphere {
             }
         }
 
+        self.update_ray_hit_info(&ray, closest_t, &mut (*rec));
         // update hit intersect info
         rec.t = closest_t;
 
