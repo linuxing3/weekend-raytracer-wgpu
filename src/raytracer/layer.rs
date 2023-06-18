@@ -1,9 +1,8 @@
-use std::{borrow::BorrowMut, ops::DerefMut};
+use std::ops::DerefMut;
 
 use super::{
-    gpu_buffer::StorageBuffer, math::*, texture::*, texture_lookup, GpuCamera, GpuMaterial,
-    Intersection, Material, Metal, Ray, RenderParams, Scatter, Scatterable, Scene, Sphere,
-    TextureDescriptor,
+    math::*, scatter_metal, texture::*, texture_lookup, GpuCamera, GpuMaterial, Intersection,
+    Material, Metal, Ray, RenderParams, Scatterable, Scene, Sphere,
 };
 
 use image::{DynamicImage, ImageBuffer, Rgb};
@@ -276,7 +275,7 @@ impl Layer {
                 for x in 0..width as u32 {
                     let pixel = (*self.imgbuf).get_pixel_mut(x, y);
 
-                    *pixel = self.ray_color(x, y, render_params);
+                    *pixel = self.ray_color_per_pixel(x, y, render_params);
                 }
             }
         }
@@ -302,7 +301,7 @@ impl Layer {
      * @depth: limit ray bouncing times
      */
 
-    pub fn ray_color(
+    pub fn ray_color_per_pixel(
         &mut self,
         x: u32,
         y: u32,
@@ -319,8 +318,6 @@ impl Layer {
         let mut depth: u32 = 20;
 
         let mut pixel_color = vec3(0.0, 0.0, 0.0);
-
-        // self.spheres[index]
 
         // sampleing
         for _s in 0..n_samples {
@@ -340,22 +337,20 @@ impl Layer {
                 depth -= 1;
 
                 // scatter + attenuation + reflect
-                // let (attenuation, scattered_ray) = metal_material.scatter_raw(rec);
                 let scattered_ray = Box::into_raw(Box::new(Ray::new_from_xy(0.0, 0.0)));
 
-                let attenuation = Box::into_raw(Box::from(vec3(0.0, 0.0, 0.0)));
-
                 unsafe {
+                    // let index = (*rec).m as usize;
+                    //
                     let index = 2;
+
                     let texture = self.material_data[index].desc1;
 
                     let fuzzy = self.material_data[2].x;
 
                     let albedo = texture_lookup(texture, &self.global_texture_data, uu, vv);
 
-                    let mut metal_material = Metal { ray: &ray, albedo };
-
-                    if !metal_material.scatter_raw(rec, attenuation, scattered_ray) {
+                    if !scatter_metal(&ray, rec, scattered_ray) {
                         return vec3_to_rgb8(vec3(0.0, 0.0, 0.0));
                     };
 
@@ -366,17 +361,17 @@ impl Layer {
                         f32::MAX,
                         rec,
                     ) {
-                        let mut sampled_color = (*rec).n * 255.0 / 2.0;
+                        let mut sampled_color = (*rec).n.normalize() * 255.0 / 2.0;
 
-                        sampled_color.x *= (*attenuation).x * fuzzy;
+                        sampled_color.x *= (*albedo).x * fuzzy;
 
-                        sampled_color.y *= (*attenuation).y * fuzzy;
+                        sampled_color.y *= (*albedo).y * fuzzy;
 
-                        sampled_color.z *= (*attenuation).z * fuzzy;
+                        sampled_color.z *= (*albedo).z * fuzzy;
 
                         pixel_color += sampled_color;
 
-                        return vec3_to_rgb8(pixel_color / 2.0);
+                        return vec3_to_rgb8(pixel_color);
                     }
                 }
             };
@@ -433,7 +428,7 @@ impl Layer {
             let old_hit = (*rec).t;
 
             for object in world[..].into_iter() {
-                let result = object.closest_hit_2(&ray, tmin, closest_hit, &mut temp_rec);
+                let result = object.closest_hit_raw(&ray, tmin, closest_hit, &mut temp_rec);
 
                 if result.0 {
                     hit_anything = true;
