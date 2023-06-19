@@ -1115,6 +1115,9 @@ impl Sphere {
     pub fn material_idx(&self) -> u32 {
         return self.2;
     }
+    pub fn center(&mut self) -> &mut glm::Vec4 {
+        return &mut self.0;
+    }
 }
 
 impl Sphere {
@@ -1126,6 +1129,7 @@ impl Sphere {
         rec: *mut Intersection,
     ) -> bool {
         unsafe {
+            // HACK: ray.origin - sphere.origin
             let oc = ray.origin - self.0.xyz();
 
             let a = dot(&ray.direction, &ray.direction);

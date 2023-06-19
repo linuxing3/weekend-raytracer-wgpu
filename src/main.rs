@@ -209,6 +209,7 @@ fn main() {
 
                     // HACK:
                     {
+                        layer.render(ui, &render_params);
                         layer.render_draw_list(ui, &render_params);
                     }
 

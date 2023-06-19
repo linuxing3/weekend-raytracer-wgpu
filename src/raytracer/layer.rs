@@ -37,7 +37,7 @@ impl Color {
 
 pub struct Layer {
     pub texture_id: imgui::TextureId,
-    pub vp_size: [f32; 2],
+    pub size: [f32; 2],
     imgbuf: *mut XImageBuffer,
     pub camera: GpuCamera,
     pub world: Vec<Box<Sphere>>,
@@ -65,7 +65,7 @@ impl Layer {
 
         let world = scene.spheres[..]
             .into_iter()
-            .map(|s| Box::new(s.clone()))
+            .map(move |s| Box::new(s.clone()))
             .collect();
 
         let materials = scene.materials;
@@ -78,7 +78,7 @@ impl Layer {
 
         Self {
             texture_id,
-            vp_size: size,
+            size: size,
             imgbuf,
             camera,
             world,
@@ -114,10 +114,10 @@ impl Layer {
         let spheres = vec![
             Sphere::new(glm::vec3(5.0, 1.2, -1.5), 1.2, 4_u32),
             Sphere::new(glm::vec3(0.0, -500.0, -1.0), 500.0, 0_u32),
-            Sphere::new(glm::vec3(0.0, 1.0, 0.0), 1.0, 3_u32),
-            Sphere::new(glm::vec3(-5.0, 1.0, 0.0), 1.0, 2_u32),
-            Sphere::new(glm::vec3(2.0, -1.0, 0.0), 2.0, 3_u32),
-            Sphere::new(glm::vec3(5.0, 0.8, 1.5), 0.8, 1_u32),
+            // Sphere::new(glm::vec3(0.0, 1.0, 0.0), 1.0, 3_u32),
+            // Sphere::new(glm::vec3(-5.0, 1.0, 0.0), 1.0, 2_u32),
+            // Sphere::new(glm::vec3(2.0, -1.0, 0.0), 2.0, 3_u32),
+            // Sphere::new(glm::vec3(5.0, 0.8, 1.5), 0.8, 1_u32),
         ];
 
         Scene { spheres, materials }
@@ -157,7 +157,7 @@ impl Layer {
         queue: &wgpu::Queue,
         renderer: &mut imgui_wgpu::Renderer,
     ) -> Option<TextureId> {
-        let [width, height] = self.vp_size;
+        let [width, height] = self.size;
 
         let imgbuf = self.imgbuf().unwrap();
 
@@ -220,24 +220,17 @@ impl Layer {
         ui: &mut imgui::Ui,
         render_params: &RenderParams,
     ) {
-        self.update_camera(render_params);
-
-        let title = format!("Texture {}", self.texture_id().id());
-
+        let title = format!("Controller");
         let window = ui.window(title);
 
-        let mut new_imgui_region_size = None;
-
         window
-            .size(self.vp_size, imgui::Condition::FirstUseEver)
+            .size(self.size, imgui::Condition::FirstUseEver)
             .build(|| {
-                new_imgui_region_size = Some(ui.content_region_avail());
+                let sphere = &mut self.world[0].clone();
 
-                for c in &mut self.camera.eye {
-                    if ui.slider("eye", -10.0, 10.0, c) {};
-                }
-
-                imgui::Image::new(self.texture_id, new_imgui_region_size.unwrap()).build(ui);
+                if ui.slider("x", -10.0, 10.0, &mut sphere.0.x) {};
+                if ui.slider("y", -10.0, 10.0, &mut sphere.0.y) {};
+                if ui.slider("z", -10.0, 10.0, &mut sphere.0.z) {};
             });
     }
 
@@ -247,10 +240,10 @@ impl Layer {
     ) {
         let (width, height) = render_params.viewport_size;
 
-        if self.vp_size[0] != width as f32 || self.vp_size[1] != height as f32 {
-            self.vp_size[0] = width as f32;
+        if self.size[0] != width as f32 || self.size[1] != height as f32 {
+            self.size[0] = width as f32;
 
-            self.vp_size[1] = height as f32;
+            self.size[1] = height as f32;
 
             // Note: GpuCamera works in Imgui viewport
             let camera = GpuCamera::new(&render_params.camera, render_params.viewport_size);
@@ -271,7 +264,7 @@ impl Layer {
     ) {
         // self.camera = GpuCamera::new(&render_params.camera,
         // render_params.viewport_size);
-        let [width, height] = self.vp_size;
+        let [width, height] = self.size;
 
         unsafe {
             // A redundant loop to demonstrate reading image data
@@ -311,7 +304,7 @@ impl Layer {
         y: u32,
         render_params: &RenderParams,
     ) -> Rgb<u8> {
-        let [width, height] = self.vp_size;
+        let [width, height] = self.size;
 
         let u = coord_to_color(x, width);
 
@@ -329,7 +322,7 @@ impl Layer {
         for _s in 0..n_samples {
             let (uu, vv) = (u + random_f32(), v + random_f32());
 
-            let ray = self.camera.make_ray(uu, vv);
+            let mut ray = self.camera.make_ray(uu, vv);
 
             // NOTE: hit info record
             let rec = Box::into_raw(Box::new(Intersection::new()));
