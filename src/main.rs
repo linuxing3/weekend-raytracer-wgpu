@@ -120,7 +120,7 @@ fn main() {
     );
 
     if layer.set_global_data() {
-        layer.set_data(&render_params);
+        layer.render(&render_params);
         layer.register_texture(&context.device, &context.queue, &mut imgui_renderer);
     };
 
@@ -209,7 +209,7 @@ fn main() {
 
                     // HACK:
                     {
-                        layer.render(ui, &render_params);
+                        layer.render_controller(ui, &render_params);
                         layer.render_draw_list(ui, &render_params);
                     }
 

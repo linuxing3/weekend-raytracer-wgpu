@@ -54,12 +54,6 @@ impl Layer {
         // Note: GpuCamera works in Imgui viewport
         let camera = GpuCamera::new(&render_params.camera, (size[0] as u32, size[1] as u32));
 
-        let [width, height] = size;
-
-        let new_buffer: XImageBuffer = ImageBuffer::new(width as u32, height as u32);
-
-        let imgbuf = Box::into_raw(Box::new(new_buffer));
-
         // Generating hittable objects
         let scene = Self::scene();
 
@@ -78,8 +72,8 @@ impl Layer {
 
         Self {
             texture_id,
-            size: size,
-            imgbuf,
+            size,
+            imgbuf: std::ptr::null_mut(),
             camera,
             world,
             materials,
@@ -210,12 +204,14 @@ impl Layer {
         // Get draw list and draw image over invisible button
         let draw_list = ui.get_window_draw_list();
 
-        draw_list
-            .add_image(self.texture_id, ui.item_rect_min(), ui.item_rect_max())
-            .build();
+        if self.imgbuf != std::ptr::null_mut() {
+            draw_list
+                .add_image(self.texture_id, ui.item_rect_min(), ui.item_rect_max())
+                .build();
+        }
     }
 
-    pub fn render(
+    pub fn render_controller(
         &mut self,
         ui: &mut imgui::Ui,
         render_params: &RenderParams,
@@ -228,9 +224,15 @@ impl Layer {
             .build(|| {
                 let sphere = &mut self.world[0].clone();
 
-                if ui.slider("x", -10.0, 10.0, &mut sphere.0.x) {};
-                if ui.slider("y", -10.0, 10.0, &mut sphere.0.y) {};
-                if ui.slider("z", -10.0, 10.0, &mut sphere.0.z) {};
+                if ui.slider("x", -10.0, 10.0, &mut sphere.0.x) {
+                    self.render(render_params);
+                };
+                if ui.slider("y", -10.0, 10.0, &mut sphere.0.y) {
+                    self.render(render_params);
+                };
+                if ui.slider("z", -10.0, 10.0, &mut sphere.0.z) {
+                    self.render(render_params);
+                };
             });
     }
 
@@ -242,29 +244,27 @@ impl Layer {
 
         if self.size[0] != width as f32 || self.size[1] != height as f32 {
             self.size[0] = width as f32;
-
             self.size[1] = height as f32;
-
-            // Note: GpuCamera works in Imgui viewport
-            let camera = GpuCamera::new(&render_params.camera, render_params.viewport_size);
-
-            self.camera = camera;
-
-            let new_imgbuf = ImageBuffer::new(width, height);
-
-            self.imgbuf = Box::into_raw(Box::new(new_imgbuf));
-
-            self.set_data(render_params);
         };
+        self.imgbuf = std::ptr::null_mut();
+        let new_buffer: XImageBuffer = ImageBuffer::new(width as u32, height as u32);
+        self.imgbuf = Box::into_raw(Box::new(new_buffer));
     }
 
-    pub fn set_data(
+    pub fn render(
         &mut self,
         render_params: &RenderParams,
-    ) {
-        // self.camera = GpuCamera::new(&render_params.camera,
-        // render_params.viewport_size);
+    ) -> bool {
         let [width, height] = self.size;
+
+        if width == 0.0 || height == 0.0 {
+            return false;
+        }
+
+        if self.imgbuf == std::ptr::null_mut() {
+            let new_buffer: XImageBuffer = ImageBuffer::new(width as u32, height as u32);
+            self.imgbuf = Box::into_raw(Box::new(new_buffer));
+        }
 
         unsafe {
             // A redundant loop to demonstrate reading image data
@@ -276,6 +276,8 @@ impl Layer {
                 }
             }
         }
+
+        true
     }
 
     /**
