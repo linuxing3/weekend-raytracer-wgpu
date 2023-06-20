@@ -1,4 +1,6 @@
-use std::{cmp::max, ops::DerefMut};
+use std::{cmp::max, ops::DerefMut, ptr::null_mut};
+
+use crate::GpuContext;
 
 use super::{
     math::*, scatter_lambertian, scatter_metal, texture::*, texture_lookup, GpuCamera, GpuMaterial,
@@ -7,7 +9,7 @@ use super::{
 };
 
 use image::{DynamicImage, ImageBuffer, Rgb};
-use imgui::TextureId;
+use imgui::{TextureId, Ui};
 use nalgebra_glm::{dot, normalize, vec3, Vec3};
 
 pub struct Color {
@@ -35,53 +37,147 @@ impl Color {
     }
 }
 
+pub struct ImguiImage {
+    pub texture_id: TextureId,
+    pub imgbuf: *mut XImageBuffer,
+}
+
+impl ImguiImage {
+    pub fn new(
+        texture_id: TextureId,
+        imgbuf: *mut XImageBuffer,
+    ) -> Self {
+        Self { texture_id, imgbuf }
+    }
+    pub fn texture_id(&self) -> TextureId {
+        self.texture_id
+    }
+    pub fn imgbuf(&mut self) -> Option<XImageBuffer> {
+        let imgbuf_boxed = unsafe { Box::from_raw(self.imgbuf) };
+
+        Some(*imgbuf_boxed)
+    }
+    pub fn allocate_memory(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        renderer: &mut imgui_wgpu::Renderer,
+    ) -> Option<TextureId> {
+        let [width, height] = [100.0, 100.0];
+
+        let imgbuf = self.imgbuf().unwrap();
+
+        let img = DynamicImage::from(imgbuf);
+
+        let bytes: &[u8] = &img.to_rgba8();
+
+        let size = wgpu::Extent3d {
+            width: width as u32,
+            height: height as u32,
+            depth_or_array_layers: 1,
+        };
+
+        let imgui_texture =
+            WgpuTexture::new_imgui_texture(&device, &queue, &renderer, &bytes, size);
+
+        self.texture_id = renderer.textures.insert(imgui_texture);
+
+        Some(self.texture_id)
+    }
+
+    pub fn set_data() {
+        unimplemented!()
+    }
+}
+
+pub trait ImguiLayer {
+    fn attach(
+        &mut self,
+        ui: &mut Ui,
+        rp: &RenderParams,
+        size: [f32; 2],
+    );
+    fn update(
+        &mut self,
+        ui: &mut Ui,
+        rp: &RenderParams,
+        size: [f32; 2],
+    );
+    fn render(
+        &mut self,
+        ui: &mut Ui,
+        rp: &RenderParams,
+    );
+}
+
+impl ImguiLayer for Layer {
+    fn attach(
+        &mut self,
+        ui: &mut Ui,
+        rp: &RenderParams,
+        size: [f32; 2],
+    ) {
+    }
+
+    fn update(
+        &mut self,
+        ui: &mut Ui,
+        rp: &RenderParams,
+        size: [f32; 2],
+    ) {
+        // self.camera.update;
+    }
+
+    fn render(
+        &mut self,
+        ui: &mut Ui,
+        rp: &RenderParams,
+    ) {
+        // self.renderer.render(rp);
+        self.render_controller(ui, rp);
+    }
+    // add code here
+}
+
 pub struct Layer {
-    pub texture_id: imgui::TextureId,
-    pub size: [f32; 2],
-    imgbuf: *mut XImageBuffer,
     pub camera: GpuCamera,
-    pub world: Vec<Box<Sphere>>,
-    pub materials: Vec<Material>,
-    global_texture_data: Vec<[f32; 3]>,
-    material_data: Vec<GpuMaterial>,
+    pub renderer: ImguiRenderer,
+    pub scene: Scene,
+    pub width: f32,
+    pub height: f32,
+    pub last_rendered_time: f32,
 }
 
 impl Layer {
     pub fn new(
-        size: [f32; 2],
         render_params: &RenderParams,
+        camera: GpuCamera,
     ) -> Self {
+        let camera_ptr = Box::into_raw(Box::new(camera));
+        let renderer = ImguiRenderer::new(render_params, camera_ptr);
         // Note: GpuCamera works in Imgui viewport
-        let camera = GpuCamera::new(&render_params.camera, (size[0] as u32, size[1] as u32));
-
-        // Generating hittable objects
         let scene = Self::scene();
 
-        let world = scene.spheres[..]
-            .into_iter()
-            .map(move |s| Box::new(s.clone()))
-            .collect();
-
-        let materials = scene.materials;
-
-        let global_texture_data: Vec<[f32; 3]> = Vec::new();
-
-        let material_data: Vec<GpuMaterial> = Vec::with_capacity(0);
-
-        let texture_id = TextureId::new(0);
+        // let world = scene.spheres[..]
+        //     .into_iter()
+        //     .map(move |s| Box::new(s.clone()))
+        //     .collect();
+        //
+        // let materials = scene.materials;
+        //
+        // let global_texture_data: Vec<[f32; 3]> = Vec::new();
+        //
+        // let material_data: Vec<GpuMaterial> = Vec::with_capacity(0);
 
         Self {
-            texture_id,
-            size,
-            imgbuf: std::ptr::null_mut(),
+            renderer,
             camera,
-            world,
-            materials,
-            global_texture_data,
-            material_data,
+            scene,
+            width: 0.0,
+            height: 0.0,
+            last_rendered_time: 0.0,
         }
     }
-
     pub fn scene() -> Scene {
         let materials = vec![
             Material::Checkerboard {
@@ -116,99 +212,29 @@ impl Layer {
 
         Scene { spheres, materials }
     }
-
     pub fn set_global_data(&mut self) -> bool {
-        self.material_data = Vec::with_capacity(self.materials.len());
+        // let material_data = Vec::with_capacity(self.scene.materials.len());
 
-        for material in self.materials.iter() {
-            let gpu_material = match material {
-                Material::Lambertian { albedo } => {
-                    GpuMaterial::lambertian(albedo, &mut self.global_texture_data)
-                }
-                Material::Metal { albedo, fuzz } => {
-                    GpuMaterial::metal(albedo, *fuzz, &mut self.global_texture_data)
-                }
-                Material::Dielectric { refraction_index } => {
-                    GpuMaterial::dielectric(*refraction_index)
-                }
-                Material::Checkerboard { odd, even } => {
-                    GpuMaterial::checkerboard(odd, even, &mut self.global_texture_data)
-                }
-            };
-
-            self.material_data.push(gpu_material);
-        }
-
-        println!("Materials: {}", self.materials.len());
-        println!("Textures:  {}", self.global_texture_data.len());
+        // for material in materials.iter() {
+        //     let gpu_material = match material {
+        //         Material::Lambertian { albedo } => {
+        //             GpuMaterial::lambertian(albedo, &mut self.global_texture_data)
+        //         }
+        //         Material::Metal { albedo, fuzz } => {
+        //             GpuMaterial::metal(albedo, *fuzz, &mut self.global_texture_data)
+        //         }
+        //         Material::Dielectric { refraction_index } => {
+        //             GpuMaterial::dielectric(*refraction_index)
+        //         }
+        //         Material::Checkerboard { odd, even } => {
+        //             GpuMaterial::checkerboard(odd, even, &mut self.global_texture_data)
+        //         }
+        //     };
+        //
+        //     self.material_data.push(gpu_material);
+        // }
 
         true
-    }
-
-    pub fn register_texture(
-        &mut self,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        renderer: &mut imgui_wgpu::Renderer,
-    ) -> Option<TextureId> {
-        let [width, height] = self.size;
-
-        let imgbuf = self.imgbuf().unwrap();
-
-        let img = DynamicImage::from(imgbuf);
-
-        let bytes: &[u8] = &img.to_rgba8();
-
-        let size = wgpu::Extent3d {
-            width: width as u32,
-            height: height as u32,
-            depth_or_array_layers: 1,
-        };
-
-        let imgui_texture =
-            WgpuTexture::new_imgui_texture(&device, &queue, &renderer, &bytes, size);
-
-        self.texture_id = renderer.textures.insert(imgui_texture);
-
-        Some(self.texture_id)
-    }
-
-    pub fn texture_id(&mut self) -> &imgui::TextureId {
-        &self.texture_id
-    }
-
-    pub fn imgbuf(&mut self) -> Option<XImageBuffer> {
-        let imgbuf_boxed = unsafe { Box::from_raw(self.imgbuf) };
-
-        Some(*imgbuf_boxed)
-    }
-
-    pub fn update_camera(
-        &mut self,
-        render_params: &RenderParams,
-    ) {
-        self.camera = GpuCamera::new(&render_params.camera, render_params.viewport_size);
-    }
-
-    pub fn render_draw_list(
-        &mut self,
-        ui: &mut imgui::Ui,
-        render_params: &RenderParams,
-    ) {
-        self.update_camera(render_params);
-
-        let title = format!("Texture {}", self.texture_id().id());
-
-        ui.invisible_button(title, ui.content_region_avail());
-
-        // Get draw list and draw image over invisible button
-        let draw_list = ui.get_window_draw_list();
-
-        if self.imgbuf != std::ptr::null_mut() {
-            draw_list
-                .add_image(self.texture_id, ui.item_rect_min(), ui.item_rect_max())
-                .build();
-        }
     }
 
     pub fn render_controller(
@@ -216,70 +242,63 @@ impl Layer {
         ui: &mut imgui::Ui,
         render_params: &RenderParams,
     ) {
-        let title = format!("Controller");
-        let window = ui.window(title);
-
-        window
-            .size(self.size, imgui::Condition::FirstUseEver)
-            .build(|| {
-                let sphere = &mut self.world[0].clone();
-
-                if ui.slider("x", -10.0, 10.0, &mut sphere.0.x) {
-                    self.render(render_params);
-                };
-                if ui.slider("y", -10.0, 10.0, &mut sphere.0.y) {
-                    self.render(render_params);
-                };
-                if ui.slider("z", -10.0, 10.0, &mut sphere.0.z) {
-                    self.render(render_params);
-                };
-            });
-    }
-
-    pub fn resize(
-        &mut self,
-        render_params: &RenderParams,
-    ) {
-        let (width, height) = render_params.viewport_size;
-
-        if self.size[0] != width as f32 || self.size[1] != height as f32 {
-            self.size[0] = width as f32;
-            self.size[1] = height as f32;
-        };
-        self.imgbuf = std::ptr::null_mut();
-        let new_buffer: XImageBuffer = ImageBuffer::new(width as u32, height as u32);
-        self.imgbuf = Box::into_raw(Box::new(new_buffer));
-    }
-
-    pub fn render(
-        &mut self,
-        render_params: &RenderParams,
-    ) -> bool {
-        let [width, height] = self.size;
-
-        if width == 0.0 || height == 0.0 {
-            return false;
-        }
-
-        if self.imgbuf == std::ptr::null_mut() {
-            let new_buffer: XImageBuffer = ImageBuffer::new(width as u32, height as u32);
-            self.imgbuf = Box::into_raw(Box::new(new_buffer));
-        }
-
         unsafe {
+            let title = format!("Controller");
+            let window = ui.window(title);
+
+            window
+                .size([200.0, 200.0], imgui::Condition::FirstUseEver)
+                .build(|| {
+                    let sphere = &mut self.scene.spheres[0].clone();
+
+                    if ui.slider("x", -10.0, 10.0, &mut sphere.0.x) {};
+                    if ui.slider("y", -10.0, 10.0, &mut sphere.0.y) {};
+                    if ui.slider("z", -10.0, 10.0, &mut sphere.0.z) {};
+                });
+        }
+    }
+}
+
+pub struct ImguiRenderer {
+    pub image: *mut ImguiImage,
+    pub camera: *mut GpuCamera,
+    pub scene: *mut Scene,
+    pub image_data: *mut Vec<u8>,
+}
+
+impl ImguiRenderer {
+    pub fn new(
+        render_params: &RenderParams,
+        camera: *mut GpuCamera,
+    ) -> Self {
+        Self {
+            camera,
+            image: null_mut(),
+            scene: null_mut(),
+            image_data: null_mut(),
+        }
+    }
+
+    fn render(
+        &mut self,
+        rp: &RenderParams,
+    ) {
+        let [width, height] = [100.0, 100.0];
+        unsafe {
+            let mut imgbuf = (*self.image).imgbuf;
+            if imgbuf == std::ptr::null_mut() {
+                let new_buffer: XImageBuffer = ImageBuffer::new(width as u32, height as u32);
+                imgbuf = Box::into_raw(Box::new(new_buffer));
+            }
             // A redundant loop to demonstrate reading image data
             for y in 0..height as u32 {
                 for x in 0..width as u32 {
-                    let pixel = (*self.imgbuf).get_pixel_mut(x, y);
-
-                    *pixel = self.ray_color_per_pixel(x, y, render_params);
+                    let pixel = (*imgbuf).get_pixel_mut(x, y);
+                    *pixel = self.ray_color_per_pixel(x, y, rp);
                 }
             }
         }
-
-        true
     }
-
     /**
      *
      * Calculate the color of ray tracing, considering the followings:
@@ -306,51 +325,52 @@ impl Layer {
         y: u32,
         render_params: &RenderParams,
     ) -> Rgb<u8> {
-        let [width, height] = self.size;
+        unsafe {
+            let (width, height) = render_params.viewport_size;
 
-        let u = coord_to_color(x, width);
+            let u = coord_to_color(x, width as f32);
 
-        let v = coord_to_color(y, height);
+            let v = coord_to_color(y, height as f32);
 
-        let n_samples = render_params.sampling.num_samples_per_pixel;
+            let n_samples = render_params.sampling.num_samples_per_pixel;
 
-        let mut depth: u32 = 20;
+            let mut depth: u32 = 20;
 
-        let multipler = 0.5;
+            let multipler = 0.5;
 
-        let mut pixel_color = vec3(0.0, 0.0, 0.0);
+            let mut pixel_color = vec3(0.0, 0.0, 0.0);
 
-        // sampleing
-        for _s in 0..n_samples {
-            let (uu, vv) = (u + random_f32(), v + random_f32());
+            // sampleing
+            for _s in 0..n_samples {
+                let (uu, vv) = (u + random_f32(), v + random_f32());
 
-            let mut ray = self.camera.make_ray(uu, vv);
+                let mut ray = (*self.camera).make_ray(uu, vv);
 
-            // NOTE: hit info record
-            let rec = Box::into_raw(Box::new(Intersection::new()));
+                // NOTE: hit info record
+                let rec = Box::into_raw(Box::new(Intersection::new()));
+                let world = &(*self.scene).spheres;
 
-            // if self.ray_hit_world(&ray, 0.001, f32::MAX, &mut rec) {
-            if self.ray_hit_world_raw(&ray, self.world.clone(), 0.001, f32::MAX, rec) {
-                if depth <= 0 {
-                    return vec3_to_rgb8(vec3(0.0, 0.0, 0.0));
-                }
+                // if self.ray_hit_world(&ray, 0.001, f32::MAX, &mut rec) {
+                if self.ray_hit_world_raw(&ray, world.clone(), 0.001, f32::MAX, rec) {
+                    if depth <= 0 {
+                        return vec3_to_rgb8(vec3(0.0, 0.0, 0.0));
+                    }
 
-                depth -= 1;
+                    depth -= 1;
 
-                // scatter + attenuation + reflect
-                let scattered_ray = Box::into_raw(Box::new(Ray::new_from_xy(0.0, 0.0)));
+                    // scatter + attenuation + reflect
+                    let scattered_ray = Box::into_raw(Box::new(Ray::new_from_xy(0.0, 0.0)));
 
-                unsafe {
                     let mut texture = TextureDescriptor::empty();
                     let mut fuzzy = 0_f32;
                     let mut albedo = Vec3::zeros();
 
-                    if scatter_metal(&ray, rec, scattered_ray) {
-                        texture = self.material_data[2].desc1;
-                        fuzzy = self.material_data[2].x;
-                        albedo =
-                            texture_lookup(texture, &self.global_texture_data, (*rec).u, (*rec).v);
-                    }
+                    // if scatter_metal(&ray, rec, scattered_ray) {
+                    //     texture = self.material_data[2].desc1;
+                    //     fuzzy = self.material_data[2].x;
+                    //     albedo =
+                    //         texture_lookup(texture, &self.global_texture_data, (*rec).u, (*rec).v);
+                    // }
 
                     let light_dir = vec3(5.0, -3.0, 2.0).normalize();
                     let light_dir_rev = (*rec).p - light_dir;
@@ -369,7 +389,7 @@ impl Layer {
 
                     if self.ray_hit_world_raw(
                         &(*scattered_ray),
-                        self.world.clone(),
+                        world.clone(),
                         0.001,
                         f32::MAX,
                         rec,
@@ -384,10 +404,10 @@ impl Layer {
                         return vec3_to_rgb8(pixel_color);
                     }
                 }
-            };
-        }
+            }
 
-        vec3_to_rgb8(vec3(v * 255.0, u * 255.0, 255.0))
+            vec3_to_rgb8(vec3(v * 255.0, u * 255.0, 255.0))
+        }
     }
 
     pub fn ray_hit_world(
@@ -397,38 +417,42 @@ impl Layer {
         tmax: f32,
         rec: &mut Intersection,
     ) -> bool {
-        let mut temp_rec = Intersection::new();
+        unsafe {
+            let mut temp_rec = Intersection::new();
 
-        let mut hit_anything = false;
+            let mut hit_anything = false;
 
-        let mut closest_hit = tmax;
+            let mut closest_hit = tmax;
 
-        let old_hit = rec.t;
+            let old_hit = rec.t;
 
-        for object in self.world[..].into_iter() {
-            let result = object.closest_hit(&ray, tmin, closest_hit, &mut temp_rec);
+            let world = &(*self.scene).spheres;
+            for object in world[..].into_iter() {
+                let result = object.closest_hit(&ray, tmin, closest_hit, &mut temp_rec);
 
-            if result.0 {
-                hit_anything = true;
+                if result.0 {
+                    hit_anything = true;
 
-                closest_hit = old_hit;
+                    closest_hit = old_hit;
 
-                *rec = *(result.1.unwrap().deref_mut());
+                    *rec = *(result.1.unwrap().deref_mut());
+                }
             }
-        }
 
-        return hit_anything;
+            return hit_anything;
+        }
     }
 
     pub fn ray_hit_world_raw(
         &mut self,
         ray: &Ray,
-        world: Vec<Box<Sphere>>,
+        world: Vec<Sphere>,
         tmin: f32,
         tmax: f32,
         rec: *mut Intersection,
     ) -> bool {
         unsafe {
+            let world = &(*self.scene).spheres;
             let mut temp_rec = Intersection::new();
 
             let mut hit_anything = false;

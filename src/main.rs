@@ -11,7 +11,8 @@ pub extern crate nalgebra_glm as glm;
 
 use fly_camera::FlyCameraController;
 use raytracer::{
-    Layer, Material, Raytracer, RenderParams, SamplingParams, Scene, SkyParams, Sphere, Texture,
+    GpuCamera, ImguiLayer, Layer, Material, Raytracer, RenderParams, SamplingParams, Scene,
+    SkyParams, Sphere, Texture,
 };
 use std::{collections::VecDeque, time::Instant};
 use winit::{
@@ -114,15 +115,9 @@ fn main() {
 
     // HACK: imgui layers
 
-    let mut layer = Layer::new(
-        [viewport_size.0 as f32, viewport_size.1 as f32],
-        &render_params,
-    );
+    let camera = GpuCamera::new(&render_params.camera, (0, 0));
 
-    if layer.set_global_data() {
-        layer.render(&render_params);
-        layer.register_texture(&context.device, &context.queue, &mut imgui_renderer);
-    };
+    let mut layer = Layer::new(&render_params, camera);
 
     event_loop.run(move |event, _, _control_flow| {
         imgui_platform.handle_event(imgui.io_mut(), &window, &event);
@@ -196,7 +191,7 @@ fn main() {
                         eprintln!("Error setting render params: {e}")
                     }
                     _ => {
-                        layer.update_camera(&render_params);
+                        // layer.update_camera(&render_params);
                     }
                 }
 
@@ -209,8 +204,7 @@ fn main() {
 
                     // HACK:
                     {
-                        layer.render_controller(ui, &render_params);
-                        layer.render_draw_list(ui, &render_params);
+                        layer.render(ui, &render_params);
                     }
 
                     {

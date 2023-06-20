@@ -4,7 +4,10 @@ use image::Rgb;
 pub use math::*;
 use nalgebra_glm::{acos, atan2, dot, vec3, Vec3};
 use wgpu::util::DeviceExt;
-pub use {angle::Angle, layer::Layer, texture::Texture, texture::WgpuTexture};
+pub use {
+    angle::Angle, layer::ImguiLayer, layer::ImguiRenderer, layer::Layer, texture::Texture,
+    texture::WgpuTexture,
+};
 
 use thiserror::Error;
 
