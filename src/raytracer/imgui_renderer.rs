@@ -40,8 +40,6 @@ impl ImguiRenderer {
             let width = image.width();
             if height != h && width != w {
                 Pin::get_unchecked_mut(image).resize(width, height, device, queue, renderer);
-            } else {
-                Pin::get_unchecked_mut(image).allocate_memory(device, queue, renderer);
             }
         }
     }

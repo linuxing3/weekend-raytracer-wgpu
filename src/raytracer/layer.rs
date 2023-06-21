@@ -11,9 +11,10 @@ use imgui::Ui;
 pub trait Layer {
     fn on_attach(
         &mut self,
-        ui: &mut Ui,
         rp: &RenderParams,
-        size: [f32; 2],
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        renderer: &mut imgui_wgpu::Renderer,
     );
     fn on_dettach(
         &mut self,
@@ -51,10 +52,15 @@ pub struct RayLayer {
 impl Layer for RayLayer {
     fn on_attach(
         &mut self,
-        ui: &mut Ui,
         rp: &RenderParams,
-        size: [f32; 2],
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        renderer: &mut imgui_wgpu::Renderer,
     ) {
+        unsafe {
+            let image: Pin<&mut ImguiImage> = Pin::as_mut(&mut self.renderer.image);
+            Pin::get_unchecked_mut(image).allocate_memory(device, queue, renderer);
+        }
     }
     fn on_dettach(
         &mut self,
@@ -81,11 +87,8 @@ impl Layer for RayLayer {
         queue: &wgpu::Queue,
         renderer: &mut imgui_wgpu::Renderer,
     ) {
-        unsafe {
-            let image: Pin<&mut ImguiImage> = Pin::as_mut(&mut self.renderer.image);
-            Pin::get_unchecked_mut(image).allocate_memory(device, queue, renderer);
-        }
-        self.render_controller(ui, rp);
+        self.render_data(ui, rp, device, queue, renderer);
+        self.render_ui(ui, rp);
     }
 
     // add code here
@@ -175,7 +178,7 @@ impl RayLayer {
         true
     }
 
-    pub fn render(
+    pub fn render_data(
         &mut self,
         ui: &mut Ui,
         rp: &RenderParams,
@@ -199,7 +202,7 @@ impl RayLayer {
         }
     }
 
-    pub fn render_controller(
+    pub fn render_ui(
         &mut self,
         ui: &mut imgui::Ui,
         render_params: &RenderParams,
@@ -216,7 +219,9 @@ impl RayLayer {
                     if ui.slider("x", -10.0, 10.0, &mut sphere.0.x) {};
                     if ui.slider("y", -10.0, 10.0, &mut sphere.0.y) {};
                     if ui.slider("z", -10.0, 10.0, &mut sphere.0.z) {};
+                    // BUG:
                     let image = &self.renderer.image;
+                    println!("[render ui] texture id: {}", image.texture_id().id());
                     imgui::Image::new(image.texture_id(), [image.width(), image.height()])
                         .build(ui);
                 });

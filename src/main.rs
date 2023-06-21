@@ -118,6 +118,12 @@ fn main() {
     let camera = GpuCamera::new(&render_params.camera, (0, 0));
 
     let mut layer = RayLayer::new(&render_params, camera);
+    layer.on_attach(
+        &render_params,
+        &context.device,
+        &context.queue,
+        &mut imgui_renderer,
+    );
 
     event_loop.run(move |event, _, _control_flow| {
         imgui_platform.handle_event(imgui.io_mut(), &window, &event);

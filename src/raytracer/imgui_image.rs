@@ -85,10 +85,9 @@ impl ImguiImage {
         if self.width != w && self.height != h {
             self.width = w;
             self.height = h;
-            // self.release();
+            self.release();
             self.allocate_memory(device, queue, renderer);
         }
-        println!("[resize] texture id: {}", self.texture_id.id());
     }
 
     pub fn release(&mut self) {
