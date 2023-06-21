@@ -11,7 +11,7 @@ pub extern crate nalgebra_glm as glm;
 
 use fly_camera::FlyCameraController;
 use raytracer::{
-    GpuCamera, ImguiLayer, Layer, Material, Raytracer, RenderParams, SamplingParams, Scene,
+    GpuCamera, Layer, Material, RayLayer, Raytracer, RenderParams, SamplingParams, Scene,
     SkyParams, Sphere, Texture,
 };
 use std::{collections::VecDeque, time::Instant};
@@ -117,7 +117,7 @@ fn main() {
 
     let camera = GpuCamera::new(&render_params.camera, (0, 0));
 
-    let mut layer = Layer::new(&render_params, camera);
+    let mut layer = RayLayer::new(&render_params, camera);
 
     event_loop.run(move |event, _, _control_flow| {
         imgui_platform.handle_event(imgui.io_mut(), &window, &event);
@@ -143,8 +143,6 @@ fn main() {
                             context
                                 .surface
                                 .configure(&context.device, &context.surface_config);
-
-                            // layer.resize(&render_params);
                         }
                     }
 
@@ -160,8 +158,6 @@ fn main() {
                             context
                                 .surface
                                 .configure(&context.device, &context.surface_config);
-
-                            // layer.resize(&render_params);
                         }
                     }
 
@@ -204,7 +200,14 @@ fn main() {
 
                     // HACK:
                     {
-                        layer.render(ui, &render_params);
+                        layer.on_render(ui, &render_params);
+                        layer.render(
+                            ui,
+                            &render_params,
+                            &context.device,
+                            &context.queue,
+                            &mut imgui_renderer,
+                        );
                     }
 
                     {
