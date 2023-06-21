@@ -108,18 +108,17 @@ impl ImguiImage {
         queue: &wgpu::Queue,
         renderer: &mut imgui_wgpu::Renderer,
     ) {
-        if self.width == w && self.height == h {
-            ()
+        if self.width != w && self.height != h {
+            self.width = w;
+            self.height = h;
+            self.release();
+            let size = wgpu::Extent3d {
+                width: self.width as u32,
+                height: self.height as u32,
+                depth_or_array_layers: 1,
+            };
+            self.allocate_memory(device, queue, renderer, size);
         }
-        self.width = w;
-        self.height = h;
-        self.release();
-        let size = wgpu::Extent3d {
-            width: self.width as u32,
-            height: self.height as u32,
-            depth_or_array_layers: 1,
-        };
-        self.allocate_memory(device, queue, renderer, size);
     }
 
     pub fn release(&mut self) {
@@ -312,8 +311,8 @@ impl RayLayer {
         queue: &wgpu::Queue,
         renderer: &mut imgui_wgpu::Renderer,
     ) {
-        self.renderer
-            .resize(self.width, self.height, device, queue, renderer);
+        // self.renderer
+        //     .resize(self.width, self.height, device, queue, renderer);
         self.renderer.render(rp, &mut self.camera, &mut self.scene);
     }
 
@@ -358,7 +357,6 @@ pub struct ImguiRenderer {
     pub image: Pin<Box<ImguiImage>>,
     pub camera: *mut GpuCamera,
     pub scene: *mut Scene,
-    pub image_data: *mut XImageBuffer,
 }
 
 impl ImguiRenderer {
@@ -371,7 +369,6 @@ impl ImguiRenderer {
             camera,
             image,
             scene: null_mut(),
-            image_data: null_mut(),
         }
     }
 
@@ -384,16 +381,12 @@ impl ImguiRenderer {
         renderer: &mut imgui_wgpu::Renderer,
     ) {
         unsafe {
-            let image = &self.image;
+            let image = &mut self.image;
             let height = image.height();
             let width = image.width();
-            if height == h && width == w {
-                ()
+            if height != h && width != w {
+                // image.resize(w, h, device, queue, renderer);
             }
-            // image.resize(w, h, device, queue, renderer);
-            self.image_data = null_mut();
-            let new_buffer: XImageBuffer = ImageBuffer::new(width as u32, height as u32);
-            self.image_data = Box::into_raw(Box::new(new_buffer));
         }
     }
 
