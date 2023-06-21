@@ -115,8 +115,7 @@ fn main() {
 
     // HACK: imgui layers
 
-    let camera = GpuCamera::new(&render_params.camera, (0, 0));
-
+    let camera = GpuCamera::new(&render_params.camera, viewport_size);
     let mut layer = RayLayer::new(&render_params, camera);
     layer.on_attach(
         &render_params,

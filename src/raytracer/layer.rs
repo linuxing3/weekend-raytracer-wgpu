@@ -58,6 +58,7 @@ impl Layer for RayLayer {
         renderer: &mut imgui_wgpu::Renderer,
     ) {
         unsafe {
+            println!("Attached imgui layer");
             let image: Pin<&mut ImguiImage> = Pin::as_mut(&mut self.renderer.image);
             Pin::get_unchecked_mut(image).allocate_memory(device, queue, renderer);
         }
@@ -186,20 +187,27 @@ impl RayLayer {
         queue: &wgpu::Queue,
         renderer: &mut imgui_wgpu::Renderer,
     ) {
-        self.renderer
-            .resize(self.width, self.height, device, queue, renderer);
+        // self.renderer
+        //     .resize(self.width, self.height, device, queue, renderer);
         self.renderer.render(rp, &mut self.camera, &mut self.scene);
     }
 
-    pub fn render_image(
+    pub fn render_ui_draw_list(
         &mut self,
         ui: &mut imgui::Ui,
         render_params: &RenderParams,
     ) {
-        unsafe {
-            let image = &self.renderer.image;
-            imgui::Image::new(image.texture_id(), [image.width(), image.height()]).build(ui);
-        }
+        let image = &self.renderer.image;
+        let title = format!("Texture {}", image.texture_id().id());
+
+        ui.invisible_button(title, ui.content_region_avail());
+
+        // Get draw list and draw image over invisible button
+        let draw_list = ui.get_window_draw_list();
+
+        draw_list
+            .add_image(image.texture_id, ui.item_rect_min(), ui.item_rect_max())
+            .build();
     }
 
     pub fn render_ui(
@@ -211,9 +219,12 @@ impl RayLayer {
             let title = format!("Controller");
             let window = ui.window(title);
 
+            let mut new_imgui_region_size = None;
+
             window
                 .size([200.0, 200.0], imgui::Condition::FirstUseEver)
                 .build(|| {
+                    new_imgui_region_size = Some(ui.content_region_avail());
                     let sphere = &mut self.scene.spheres[0].clone();
 
                     if ui.slider("x", -10.0, 10.0, &mut sphere.0.x) {};
@@ -222,8 +233,7 @@ impl RayLayer {
                     // BUG:
                     let image = &self.renderer.image;
                     println!("[render ui] texture id: {}", image.texture_id().id());
-                    imgui::Image::new(image.texture_id(), [image.width(), image.height()])
-                        .build(ui);
+                    imgui::Image::new(image.texture_id(), new_imgui_region_size.unwrap()).build(ui);
                 });
         }
     }

@@ -18,7 +18,7 @@ impl ImguiRenderer {
         render_params: &RenderParams,
         camera: *mut GpuCamera,
     ) -> Self {
-        let image = ImguiImage::new(200.0, 200.0);
+        let image = ImguiImage::new(10.0, 10.0);
         Self {
             camera,
             image,
@@ -61,6 +61,7 @@ impl ImguiRenderer {
                 for x in 0..width as u32 {
                     let pixel = (*imgbuf).get_pixel_mut(x, y);
                     *pixel = self.ray_color_per_pixel(x, y, rp);
+                    println!("r{} g{} b{}", pixel.0[0], pixel.0[1], pixel.0[2]);
                 }
             }
             // set to image

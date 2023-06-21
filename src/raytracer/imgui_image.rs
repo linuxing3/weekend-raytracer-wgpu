@@ -62,7 +62,6 @@ impl ImguiImage {
                 WgpuTexture::new_imgui_texture(&device, &queue, &renderer, &bytes, size);
 
             self.texture_id = renderer.textures.insert(imgui_texture);
-            println!("[allocate_memory] texture id: {}", self.texture_id.id());
         }
     }
 
