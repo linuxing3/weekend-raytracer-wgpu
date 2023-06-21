@@ -200,8 +200,7 @@ fn main() {
 
                     // HACK:
                     {
-                        layer.on_render(ui, &render_params);
-                        layer.render(
+                        layer.on_render(
                             ui,
                             &render_params,
                             &context.device,

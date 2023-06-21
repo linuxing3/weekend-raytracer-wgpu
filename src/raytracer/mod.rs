@@ -5,8 +5,8 @@ pub use math::*;
 use nalgebra_glm::{acos, atan2, dot, vec3, Vec3};
 use wgpu::util::DeviceExt;
 pub use {
-    angle::Angle, layer::ImguiRenderer, layer::Layer, layer::RayLayer, texture::Texture,
-    texture::WgpuTexture,
+    angle::Angle, imgui_image::ImguiImage, imgui_renderer::ImguiRenderer, layer::Layer,
+    layer::RayLayer, texture::Texture, texture::WgpuTexture,
 };
 
 use thiserror::Error;
@@ -14,6 +14,8 @@ use thiserror::Error;
 mod angle;
 mod color;
 mod gpu_buffer;
+mod imgui_image;
+mod imgui_renderer;
 mod layer;
 mod math;
 mod texture;
