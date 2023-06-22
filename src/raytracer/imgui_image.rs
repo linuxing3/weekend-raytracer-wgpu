@@ -42,6 +42,14 @@ impl ImguiImage {
         boxed
     }
 
+    pub fn imagebuffer_to_bytes(&mut self) -> Vec<u8> {
+        unsafe {
+            let imgbuf_ptr = self.imgbuf_pin.as_ptr();
+            let img = DynamicImage::from((*imgbuf_ptr).clone());
+            return img.to_rgba8().to_vec();
+        }
+    }
+
     // BUG:
     pub fn allocate_memory(
         &mut self,
@@ -55,13 +63,31 @@ impl ImguiImage {
                 height: self.height as u32,
                 depth_or_array_layers: 1,
             };
-            let imgbuf_ptr = self.imgbuf_pin.as_ptr();
-            let img = DynamicImage::from((*imgbuf_ptr).clone());
-            let bytes: &[u8] = &img.to_rgba8();
+            let bytes = self.imagebuffer_to_bytes();
             let imgui_texture =
                 WgpuTexture::new_imgui_texture(&device, &queue, &renderer, &bytes, size);
 
             self.texture_id = renderer.textures.insert(imgui_texture);
+        }
+    }
+
+    pub fn update_memory(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        renderer: &mut imgui_wgpu::Renderer,
+    ) {
+        unsafe {
+            let size = wgpu::Extent3d {
+                width: self.width as u32,
+                height: self.height as u32,
+                depth_or_array_layers: 1,
+            };
+            let bytes = self.imagebuffer_to_bytes();
+            let imgui_texture =
+                WgpuTexture::new_imgui_texture(&device, &queue, &renderer, &bytes, size);
+
+            renderer.textures.replace(self.texture_id(), imgui_texture);
         }
     }
 
@@ -84,9 +110,8 @@ impl ImguiImage {
         if self.width != w && self.height != h {
             self.width = w;
             self.height = h;
-            self.release();
-            self.allocate_memory(device, queue, renderer);
         }
+        self.update_memory(device, queue, renderer);
     }
 
     pub fn release(&mut self) {

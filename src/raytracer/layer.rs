@@ -88,7 +88,9 @@ impl Layer for RayLayer {
         queue: &wgpu::Queue,
         renderer: &mut imgui_wgpu::Renderer,
     ) {
+        // update image data from renderer
         self.render_data(ui, rp, device, queue, renderer);
+        // render ui in layer
         self.render_ui(ui, rp);
     }
 
@@ -187,8 +189,8 @@ impl RayLayer {
         queue: &wgpu::Queue,
         renderer: &mut imgui_wgpu::Renderer,
     ) {
-        // self.renderer
-        //     .resize(self.width, self.height, device, queue, renderer);
+        self.renderer
+            .resize(self.width, self.height, device, queue, renderer);
         self.renderer.render(rp, &mut self.camera, &mut self.scene);
     }
 
@@ -232,7 +234,6 @@ impl RayLayer {
                     if ui.slider("z", -10.0, 10.0, &mut sphere.0.z) {};
                     // BUG:
                     let image = &self.renderer.image;
-                    println!("[render ui] texture id: {}", image.texture_id().id());
                     imgui::Image::new(image.texture_id(), new_imgui_region_size.unwrap()).build(ui);
                 });
         }

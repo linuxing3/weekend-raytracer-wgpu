@@ -2,7 +2,7 @@ use super::{
     math::*, GpuCamera, ImguiImage, Intersection, Ray, RenderParams, Scene, Sphere,
     TextureDescriptor,
 };
-use image::Rgb;
+use image::{ImageBuffer, Rgb};
 use nalgebra_glm::{dot, vec3, Vec3};
 use std::pin::Pin;
 use std::{ops::DerefMut, ptr::null_mut};
@@ -61,7 +61,6 @@ impl ImguiRenderer {
                 for x in 0..width as u32 {
                     let pixel = (*imgbuf).get_pixel_mut(x, y);
                     *pixel = self.ray_color_per_pixel(x, y, rp);
-                    println!("r{} g{} b{}", pixel.0[0], pixel.0[1], pixel.0[2]);
                 }
             }
             // set to image
@@ -73,9 +72,11 @@ impl ImguiRenderer {
      * 1. multitimes bouncing
      * 2. send ray from eye
      * 3. hit the sphere at, got intersection (point vector, normal vector,
-     * etc.) 4. recursively send ray for sampling times with material
+     * etc.)
+     * 4. recursively send ray for sampling times with material
      * color/texture, from p to unit sphere with normal vector lenght as
-     * radius 5. convert normal plus other physical factors
+     * radius
+     * 5. convert normal plus other physical factors
      * (attenuation, fuzzy refection) to get final color
      *
      * @params
@@ -195,6 +196,7 @@ impl ImguiRenderer {
             let old_hit = rec.t;
 
             let world = &(*self.scene).spheres;
+
             for object in world[..].into_iter() {
                 let result = object.closest_hit(&ray, tmin, closest_hit, &mut temp_rec);
 
