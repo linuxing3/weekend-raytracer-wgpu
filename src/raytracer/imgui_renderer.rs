@@ -1,6 +1,6 @@
 use super::{
-    math::*, GpuCamera, ImguiImage, Intersection, Ray, RenderParams, Scene, Sphere,
-    TextureDescriptor,
+    math::*, scatter_lambertian, scatter_metal, texture_lookup, GpuCamera, ImguiImage,
+    Intersection, Ray, RenderParams, Scene, Sphere, TextureDescriptor,
 };
 use image::{ImageBuffer, Rgb};
 use nalgebra_glm::{dot, vec3, Vec3};
@@ -60,11 +60,23 @@ impl ImguiRenderer {
             for y in 0..height as u32 {
                 for x in 0..width as u32 {
                     let pixel = (*imgbuf).get_pixel_mut(x, y);
-                    *pixel = self.ray_color_per_pixel(x, y, rp);
+                    *pixel = self.per_pixel(x, y, rp);
                 }
             }
             // set to image
         }
+    }
+    pub fn per_pixel(
+        &mut self,
+        x: u32,
+        y: u32,
+        render_params: &RenderParams,
+    ) -> Rgb<u8> {
+        let height = (*self.image).height();
+        let width = (*self.image).width();
+        let u = coord_to_color(x, width as f32);
+        let v = coord_to_color(y, height as f32);
+        return vec3_to_rgb8(vec3(v * 255.0, u * 255.0, 255.0));
     }
     /**
      *
@@ -95,7 +107,8 @@ impl ImguiRenderer {
         render_params: &RenderParams,
     ) -> Rgb<u8> {
         unsafe {
-            let (width, height) = render_params.viewport_size;
+            let height = (*self.image).height();
+            let width = (*self.image).width();
 
             let u = coord_to_color(x, width as f32);
 
@@ -120,7 +133,7 @@ impl ImguiRenderer {
                 let world = &(*self.scene).spheres;
 
                 // if self.ray_hit_world(&ray, 0.001, f32::MAX, &mut rec) {
-                if self.ray_hit_world_raw(&ray, world.clone(), 0.001, f32::MAX, rec) {
+                if self.ray_hit_world_raw(&ray, world, 0.001, f32::MAX, rec) {
                     if depth <= 0 {
                         return vec3_to_rgb8(vec3(0.0, 0.0, 0.0));
                     }
@@ -141,12 +154,12 @@ impl ImguiRenderer {
                     //         texture_lookup(texture, &self.global_texture_data, (*rec).u, (*rec).v);
                     // }
 
-                    let light_dir = vec3(5.0, -3.0, 2.0).normalize();
-                    let light_dir_rev = (*rec).p - light_dir;
-                    let mut light_theta = dot(&(*rec).n, &light_dir_rev);
-                    if light_theta < 0.0 {
-                        light_theta = 0.0
-                    };
+                    // let light_dir = vec3(5.0, -3.0, 2.0).normalize();
+                    // let light_dir_rev = (*rec).p - light_dir;
+                    // let mut light_theta = dot(&(*rec).n, &light_dir_rev);
+                    // if light_theta < 0.0 {
+                    //     light_theta = 0.0
+                    // };
                     // let light_intensity = max(light_theta, 0_f32);
 
                     // if scatter_lambertian(&ray, rec, scattered_ray) {
@@ -156,13 +169,7 @@ impl ImguiRenderer {
                     //         texture_lookup(texture, &self.global_texture_data, (*rec).u, (*rec).v);
                     // }
 
-                    if self.ray_hit_world_raw(
-                        &(*scattered_ray),
-                        world.clone(),
-                        0.001,
-                        f32::MAX,
-                        rec,
-                    ) {
+                    if self.ray_hit_world_raw(&(*scattered_ray), world, 0.001, f32::MAX, rec) {
                         let mut sampled_color = (*rec).n.normalize() * 255.0 / 2.0;
                         sampled_color.x *= (*albedo).x * fuzzy;
                         sampled_color.y *= (*albedo).y * fuzzy;
@@ -216,7 +223,7 @@ impl ImguiRenderer {
     pub fn ray_hit_world_raw(
         &mut self,
         ray: &Ray,
-        world: Vec<Sphere>,
+        world: &Vec<Sphere>,
         tmin: f32,
         tmax: f32,
         rec: *mut Intersection,

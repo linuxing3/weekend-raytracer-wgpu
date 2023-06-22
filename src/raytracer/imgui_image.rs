@@ -24,7 +24,6 @@ impl ImguiImage {
         // let (width, height) = render_params.viewport_size;
         let texture_id = TextureId::new(0);
         let imgbuf = ImageBuffer::new(width as u32, height as u32);
-        // let imgbuf = Box::into_raw(Box::new(new_buffer));
         let res = ImguiImage {
             texture_id,
             imgbuf,
@@ -91,14 +90,6 @@ impl ImguiImage {
         }
     }
 
-    pub fn set_imgbuf(
-        &mut self,
-        imgbuf: &mut XImageBuffer,
-    ) {
-        unsafe {
-            self.imgbuf_pin = NonNull::from(imgbuf);
-        }
-    }
     pub fn resize(
         &mut self,
         w: f32,
@@ -111,6 +102,8 @@ impl ImguiImage {
             self.width = w;
             self.height = h;
         }
+        // NOTE:
+        // resize happens instantly, memory must be updated!!!
         self.update_memory(device, queue, renderer);
     }
 
