@@ -1,16 +1,20 @@
+#![deny(clippy::pedantic, nonstandard_style)]
 use super::{
-    math::*, scatter_lambertian, scatter_metal, texture_lookup, GpuCamera, ImguiImage,
-    Intersection, Ray, RenderParams, Scene, Sphere, TextureDescriptor,
+    math::*, scatter_lambertian, scatter_metal, texture_lookup, GpuCamera, GpuMaterial, ImguiImage,
+    Intersection, Metal, Ray, RenderParams, Scene, Sphere, TextureDescriptor,
 };
 use image::{ImageBuffer, Rgb};
 use nalgebra_glm::{dot, vec3, Vec3};
 use std::pin::Pin;
+use std::ptr::null;
 use std::{ops::DerefMut, ptr::null_mut};
 
 pub struct ImguiRenderer {
     pub image: Pin<Box<ImguiImage>>,
     pub camera: *mut GpuCamera,
     pub scene: *mut Scene,
+    material_data: *const Vec<GpuMaterial>,
+    global_texture_data: *const Vec<[f32; 3]>,
 }
 
 impl ImguiRenderer {
@@ -18,11 +22,13 @@ impl ImguiRenderer {
         render_params: &RenderParams,
         camera: *mut GpuCamera,
     ) -> Self {
-        let image = ImguiImage::new(10.0, 10.0);
+        let image = ImguiImage::new(100.0, 100.0);
         Self {
             camera,
             image,
             scene: null_mut(),
+            material_data: null(),
+            global_texture_data: null(),
         }
     }
 
@@ -33,14 +39,16 @@ impl ImguiRenderer {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         renderer: &mut imgui_wgpu::Renderer,
-    ) {
+    ) -> bool {
         unsafe {
             let image: Pin<&mut ImguiImage> = Pin::as_mut(&mut self.image);
             let height = image.height();
             let width = image.width();
             if height != h && width != w {
                 Pin::get_unchecked_mut(image).resize(width, height, device, queue, renderer);
+                return true;
             }
+            false
         }
     }
 
@@ -49,9 +57,13 @@ impl ImguiRenderer {
         rp: &RenderParams,
         camera: *mut GpuCamera,
         scene: *mut Scene,
+        materials: *const Vec<GpuMaterial>,
+        textures: *const Vec<[f32; 3]>,
     ) {
         self.camera = camera;
         self.scene = scene;
+        self.material_data = materials;
+        self.global_texture_data = textures;
         unsafe {
             let height = (*self.image).height();
             let width = (*self.image).width();
@@ -60,7 +72,7 @@ impl ImguiRenderer {
             for y in 0..height as u32 {
                 for x in 0..width as u32 {
                     let pixel = (*imgbuf).get_pixel_mut(x, y);
-                    *pixel = self.per_pixel(x, y, rp);
+                    *pixel = self.ray_color_per_pixel(x, y, rp);
                 }
             }
             // set to image
@@ -76,7 +88,17 @@ impl ImguiRenderer {
         let width = (*self.image).width();
         let u = coord_to_color(x, width as f32);
         let v = coord_to_color(y, height as f32);
-        return vec3_to_rgb8(vec3(v * 255.0, u * 255.0, 255.0));
+
+        unsafe {
+            let first_sphere = (*self.scene).spheres[1];
+            let (uu, vv) = (u + random_f32(), v + random_f32());
+            let mut ray = (*self.camera).make_ray(uu, vv);
+            let rec = Box::into_raw(Box::new(Intersection::new()));
+            first_sphere.closest_hit_raw(&ray, 0.001, std::f32::MAX, rec);
+            let mut sampled_color = (*rec).n.normalize() * 255.0 / 2.0;
+            return vec3_to_rgb8(sampled_color);
+            // return vec3_to_rgb8(vec3(v * 255.0, u * 255.0, 255.0));
+        }
     }
     /**
      *
@@ -120,8 +142,9 @@ impl ImguiRenderer {
 
             let multipler = 0.5;
 
-            let mut pixel_color = vec3(0.0, 0.0, 0.0);
+            let mut pixel_color = Vec3::zeros();
 
+            let world = &(*self.scene).spheres;
             // sampleing
             for _s in 0..n_samples {
                 let (uu, vv) = (u + random_f32(), v + random_f32());
@@ -130,7 +153,6 @@ impl ImguiRenderer {
 
                 // NOTE: hit info record
                 let rec = Box::into_raw(Box::new(Intersection::new()));
-                let world = &(*self.scene).spheres;
 
                 // if self.ray_hit_world(&ray, 0.001, f32::MAX, &mut rec) {
                 if self.ray_hit_world_raw(&ray, world, 0.001, f32::MAX, rec) {
@@ -144,36 +166,50 @@ impl ImguiRenderer {
                     let scattered_ray = Box::into_raw(Box::new(Ray::new_from_xy(0.0, 0.0)));
 
                     let mut texture = TextureDescriptor::empty();
-                    let mut fuzzy = 0_f32;
+                    let mut fuzzy = 0.0;
                     let mut albedo = Vec3::zeros();
 
                     // if scatter_metal(&ray, rec, scattered_ray) {
-                    //     texture = self.material_data[2].desc1;
-                    //     fuzzy = self.material_data[2].x;
-                    //     albedo =
-                    //         texture_lookup(texture, &self.global_texture_data, (*rec).u, (*rec).v);
+                    //     texture = (*self.material_data)[2].desc1;
+                    //     fuzzy = (*self.material_data)[2].x;
+                    //     albedo = texture_lookup(
+                    //         texture,
+                    //         &(*self.global_texture_data),
+                    //         (*rec).u,
+                    //         (*rec).v,
+                    //     );
                     // }
-
-                    // let light_dir = vec3(5.0, -3.0, 2.0).normalize();
-                    // let light_dir_rev = (*rec).p - light_dir;
-                    // let mut light_theta = dot(&(*rec).n, &light_dir_rev);
-                    // if light_theta < 0.0 {
-                    //     light_theta = 0.0
+                    // let mut metal_material = Metal {
+                    //     ray: &ray,
+                    //     albedo: vec3(1.0, 0.85, 0.57),
                     // };
-                    // let light_intensity = max(light_theta, 0_f32);
+
+                    {
+                        let light_dir = vec3(5.0, -3.0, 2.0).normalize();
+                        let light_dir_rev = (*rec).p - light_dir;
+                        let mut light_theta = dot(&(*rec).n, &light_dir_rev);
+                        if light_theta < 0.0 {
+                            light_theta = 0.0
+                        };
+                        // let light_intensity = std::cmp::max(light_theta, 0_f32);
+                    }
 
                     // if scatter_lambertian(&ray, rec, scattered_ray) {
-                    //     texture = self.material_data[1].desc1;
-                    //     fuzzy = self.material_data[1].x;
-                    //     albedo =
-                    //         texture_lookup(texture, &self.global_texture_data, (*rec).u, (*rec).v);
+                    //     texture = (*self.material_data)[1].desc1;
+                    //     fuzzy = (*self.material_data)[1].x;
+                    //     albedo = texture_lookup(
+                    //         texture,
+                    //         &(*self.global_texture_data),
+                    //         (*rec).u,
+                    //         (*rec).v,
+                    //     );
                     // }
 
                     if self.ray_hit_world_raw(&(*scattered_ray), world, 0.001, f32::MAX, rec) {
                         let mut sampled_color = (*rec).n.normalize() * 255.0 / 2.0;
-                        sampled_color.x *= (*albedo).x * fuzzy;
-                        sampled_color.y *= (*albedo).y * fuzzy;
-                        sampled_color.z *= (*albedo).z * fuzzy;
+                        // sampled_color.x *= (*albedo).x * fuzzy;
+                        // sampled_color.y *= (*albedo).y * fuzzy;
+                        // sampled_color.z *= (*albedo).z * fuzzy;
 
                         pixel_color += multipler * sampled_color;
 

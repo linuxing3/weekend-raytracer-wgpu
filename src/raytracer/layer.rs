@@ -1,3 +1,4 @@
+#![deny(clippy::pedantic, nonstandard_style)]
 use std::pin::Pin;
 
 use super::{
@@ -40,11 +41,11 @@ pub trait Layer {
 
 pub struct RayLayer {
     camera: GpuCamera,
-    pub renderer: ImguiRenderer,
+    renderer: ImguiRenderer,
     scene: Scene,
     width: f32,
     height: f32,
-    pub last_rendered_time: f32,
+    last_rendered_time: f32,
     material_data: Vec<GpuMaterial>,
     global_texture_data: Vec<[f32; 3]>,
 }
@@ -102,14 +103,14 @@ impl RayLayer {
         render_params: &RenderParams,
         camera: GpuCamera,
     ) -> Self {
-        let camera_ptr = Box::into_raw(Box::new(camera));
-        let renderer = ImguiRenderer::new(render_params, camera_ptr);
-        // Note: GpuCamera works in Imgui viewport
-        let scene = Self::scene();
+        let scene = scene();
 
-        let global_texture_data: Vec<[f32; 3]> = Vec::new();
-        //
-        let material_data: Vec<GpuMaterial> = Vec::with_capacity(0);
+        // Note: GpuCamera works in Imgui viewport
+        let camera_ptr = Box::into_raw(Box::new(camera));
+        let global_texture_data = Vec::new();
+        let material_data = Vec::with_capacity(0);
+
+        let renderer = ImguiRenderer::new(render_params, camera_ptr);
 
         Self {
             renderer,
@@ -121,40 +122,6 @@ impl RayLayer {
             material_data,
             global_texture_data,
         }
-    }
-    pub fn scene() -> Scene {
-        let materials = vec![
-            Material::Checkerboard {
-                even: Texture::new_from_color(glm::vec3(0.5_f32, 0.7_f32, 0.8_f32)),
-                odd: Texture::new_from_color(glm::vec3(0.9_f32, 0.9_f32, 0.9_f32)),
-            },
-            Material::Lambertian {
-                albedo: Texture::new_from_image("assets/moon.jpeg")
-                    .expect("Hardcoded path should be valid"),
-            },
-            Material::Metal {
-                albedo: Texture::new_from_color(glm::vec3(1_f32, 0.85_f32, 0.57_f32)),
-                fuzz: 0.4_f32,
-            },
-            Material::Dielectric {
-                refraction_index: 1.5_f32,
-            },
-            Material::Lambertian {
-                albedo: Texture::new_from_image("assets/earthmap.jpeg")
-                    .expect("Hardcoded path should be valid"),
-            },
-        ];
-
-        let spheres = vec![
-            Sphere::new(glm::vec3(5.0, 1.2, -1.5), 1.2, 4_u32),
-            Sphere::new(glm::vec3(0.0, -500.0, -1.0), 500.0, 0_u32),
-            // Sphere::new(glm::vec3(0.0, 1.0, 0.0), 1.0, 3_u32),
-            // Sphere::new(glm::vec3(-5.0, 1.0, 0.0), 1.0, 2_u32),
-            // Sphere::new(glm::vec3(2.0, -1.0, 0.0), 2.0, 3_u32),
-            // Sphere::new(glm::vec3(5.0, 0.8, 1.5), 0.8, 1_u32),
-        ];
-
-        Scene { spheres, materials }
     }
     pub fn set_global_data(&mut self) -> bool {
         self.material_data = Vec::with_capacity(self.scene.materials.len());
@@ -189,9 +156,23 @@ impl RayLayer {
         queue: &wgpu::Queue,
         renderer: &mut imgui_wgpu::Renderer,
     ) {
-        self.renderer
-            .resize(self.width, self.height, device, queue, renderer);
-        self.renderer.render(rp, &mut self.camera, &mut self.scene);
+        // set material and texture data in layer
+        if self.set_global_data() {
+            // call renderer to resize
+            self.renderer
+                .resize(self.width, self.height, device, queue, renderer);
+
+            // call renderer to render
+            let material_data_ptr = &self.material_data as *const Vec<GpuMaterial>;
+            let global_texture_data_ptr = &self.global_texture_data as *const Vec<[f32; 3]>;
+            self.renderer.render(
+                rp,
+                &mut self.camera,
+                &mut self.scene,
+                material_data_ptr,
+                global_texture_data_ptr,
+            );
+        };
     }
 
     pub fn render_ui_draw_list(
@@ -227,7 +208,7 @@ impl RayLayer {
                 .size([200.0, 200.0], imgui::Condition::FirstUseEver)
                 .build(|| {
                     new_imgui_region_size = Some(ui.content_region_avail());
-                    let sphere = &mut self.scene.spheres[0].clone();
+                    let sphere = &mut self.scene.spheres[0];
 
                     if ui.slider("x", -10.0, 10.0, &mut sphere.0.x) {};
                     if ui.slider("y", -10.0, 10.0, &mut sphere.0.y) {};
@@ -238,4 +219,44 @@ impl RayLayer {
                 });
         }
     }
+
+    /// Returns a reference to the material data of this [`RayLayer`].
+    pub fn material_data(&self) -> &Vec<GpuMaterial> {
+        self.material_data.as_ref()
+    }
+}
+
+pub fn scene() -> Scene {
+    let materials = vec![
+        Material::Checkerboard {
+            even: Texture::new_from_color(glm::vec3(0.5_f32, 0.7_f32, 0.8_f32)),
+            odd: Texture::new_from_color(glm::vec3(0.9_f32, 0.9_f32, 0.9_f32)),
+        },
+        Material::Lambertian {
+            albedo: Texture::new_from_image("assets/moon.jpeg")
+                .expect("Hardcoded path should be valid"),
+        },
+        Material::Metal {
+            albedo: Texture::new_from_color(glm::vec3(1_f32, 0.85_f32, 0.57_f32)),
+            fuzz: 0.4_f32,
+        },
+        Material::Dielectric {
+            refraction_index: 1.5_f32,
+        },
+        Material::Lambertian {
+            albedo: Texture::new_from_image("assets/earthmap.jpeg")
+                .expect("Hardcoded path should be valid"),
+        },
+    ];
+
+    let spheres = vec![
+        Sphere::new(glm::vec3(5.0, 1.2, -1.5), 1.2, 4_u32),
+        Sphere::new(glm::vec3(0.0, -500.0, -1.0), 500.0, 0_u32),
+        // Sphere::new(glm::vec3(0.0, 1.0, 0.0), 1.0, 3_u32),
+        // Sphere::new(glm::vec3(-5.0, 1.0, 0.0), 1.0, 2_u32),
+        // Sphere::new(glm::vec3(2.0, -1.0, 0.0), 2.0, 3_u32),
+        // Sphere::new(glm::vec3(5.0, 0.8, 1.5), 0.8, 1_u32),
+    ];
+
+    Scene { spheres, materials }
 }

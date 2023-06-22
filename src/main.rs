@@ -1,9 +1,4 @@
-#![deny(
-    clippy::pedantic,
-    rust_2018_idioms,
-    future_incompatible,
-    nonstandard_style
-)]
+#![deny(clippy::pedantic, nonstandard_style)]
 
 mod fly_camera;
 mod raytracer;
