@@ -210,10 +210,11 @@ impl RayLayer {
                     new_imgui_region_size = Some(ui.content_region_avail());
                     let sphere = &mut self.scene.spheres[0];
 
-                    if ui.slider("x", -10.0, 10.0, &mut sphere.0.x) {};
-                    if ui.slider("y", -10.0, 10.0, &mut sphere.0.y) {};
                     if ui.slider("z", -10.0, 10.0, &mut sphere.0.z) {};
-                    // BUG:
+                    if ui.slider("y", -10.0, 10.0, &mut sphere.0.y) {};
+                    if ui.slider("x", -10.0, 10.0, &mut sphere.0.x) {};
+                    if ui.slider("r", 0.0, 100.0, &mut sphere.1) {};
+
                     let image = &self.renderer.image;
                     imgui::Image::new(image.texture_id(), new_imgui_region_size.unwrap()).build(ui);
                 });
@@ -250,8 +251,9 @@ pub fn scene() -> Scene {
     ];
 
     let spheres = vec![
-        Sphere::new(glm::vec3(5.0, 1.2, -1.5), 1.2, 4_u32),
-        Sphere::new(glm::vec3(0.0, -500.0, -1.0), 500.0, 0_u32),
+        Sphere::new(glm::vec3(5.0, -2.5, 2.5), 2.5, 2_u32),
+        // Sphere::new(glm::vec3(5.0, -2.5, 2.5), 2.5, 4_u32),
+        // Sphere::new(glm::vec3(0.0, 3.5, 1.0), 3.6, 0_u32),
         // Sphere::new(glm::vec3(0.0, 1.0, 0.0), 1.0, 3_u32),
         // Sphere::new(glm::vec3(-5.0, 1.0, 0.0), 1.0, 2_u32),
         // Sphere::new(glm::vec3(2.0, -1.0, 0.0), 2.0, 3_u32),

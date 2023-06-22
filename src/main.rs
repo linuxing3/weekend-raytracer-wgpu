@@ -210,132 +210,132 @@ fn main() {
                     }
 
                     {
-                        let window = ui.window("Parameters");
-
-                        window
-                            .size([300.0, 300.0], imgui::Condition::FirstUseEver)
-                            .build(|| {
-                                ui.text(format!(
-                                    "FPS: {:.1}, render progress: {:.1} %",
-                                    fps_counter.average_fps(),
-                                    raytracer.progress() * 100.0
-                                ));
-
-                                ui.separator();
-
-                                ui.text("Sampling parameters");
-
-                                ui.text("num_samples_per_pixel");
-
-                                ui.same_line();
-
-                                ui.radio_button(
-                                    "1",
-                                    &mut render_params.sampling.num_samples_per_pixel,
-                                    1_u32,
-                                );
-
-                                ui.same_line();
-
-                                ui.radio_button(
-                                    "2",
-                                    &mut render_params.sampling.num_samples_per_pixel,
-                                    2_u32,
-                                );
-
-                                ui.same_line();
-
-                                ui.radio_button(
-                                    "4",
-                                    &mut render_params.sampling.num_samples_per_pixel,
-                                    4_u32,
-                                );
-
-                                ui.text("max_samples_per_pixel");
-
-                                ui.same_line();
-
-                                ui.radio_button(
-                                    "128",
-                                    &mut render_params.sampling.max_samples_per_pixel,
-                                    128_u32,
-                                );
-
-                                ui.same_line();
-
-                                ui.radio_button(
-                                    "256",
-                                    &mut render_params.sampling.max_samples_per_pixel,
-                                    256_u32,
-                                );
-
-                                ui.same_line();
-
-                                ui.radio_button(
-                                    "512",
-                                    &mut render_params.sampling.max_samples_per_pixel,
-                                    512_u32,
-                                );
-
-                                ui.slider(
-                                    "num_bounces",
-                                    4,
-                                    10,
-                                    &mut render_params.sampling.num_bounces,
-                                );
-
-                                ui.separator();
-
-                                ui.text("Camera parameters");
-
-                                ui.slider(
-                                    "vfov",
-                                    10.0,
-                                    90.0,
-                                    &mut fly_camera_controller.vfov_degrees,
-                                );
-
-                                ui.slider(
-                                    "aperture",
-                                    0.0,
-                                    1.0,
-                                    &mut fly_camera_controller.aperture,
-                                );
-
-                                ui.slider(
-                                    "focus_distance",
-                                    5.0,
-                                    20.0,
-                                    &mut fly_camera_controller.focus_distance,
-                                );
-
-                                ui.separator();
-
-                                ui.text("Sky parameters");
-
-                                ui.slider(
-                                    "azimuth",
-                                    0_f32,
-                                    360_f32,
-                                    &mut render_params.sky.azimuth_degrees,
-                                );
-
-                                ui.slider(
-                                    "inclination",
-                                    0_f32,
-                                    90_f32,
-                                    &mut render_params.sky.zenith_degrees,
-                                );
-
-                                ui.slider(
-                                    "turbidity",
-                                    1_f32,
-                                    10_f32,
-                                    &mut render_params.sky.turbidity,
-                                );
-
-                                ui.color_edit3("albedo", &mut render_params.sky.albedo);
-                            });
+                        // let window = ui.window("Parameters");
+                        //
+                        // window
+                        //     .size([300.0, 300.0], imgui::Condition::FirstUseEver)
+                        //     .build(|| {
+                        //         ui.text(format!(
+                        //             "FPS: {:.1}, render progress: {:.1} %",
+                        //             fps_counter.average_fps(),
+                        //             raytracer.progress() * 100.0
+                        //         ));
+                        //
+                        //         ui.separator();
+                        //
+                        //         ui.text("Sampling parameters");
+                        //
+                        //         ui.text("num_samples_per_pixel");
+                        //
+                        //         ui.same_line();
+                        //
+                        //         ui.radio_button(
+                        //             "1",
+                        //             &mut render_params.sampling.num_samples_per_pixel,
+                        //             1_u32,
+                        //         );
+                        //
+                        //         ui.same_line();
+                        //
+                        //         ui.radio_button(
+                        //             "2",
+                        //             &mut render_params.sampling.num_samples_per_pixel,
+                        //             2_u32,
+                        //         );
+                        //
+                        //         ui.same_line();
+                        //
+                        //         ui.radio_button(
+                        //             "4",
+                        //             &mut render_params.sampling.num_samples_per_pixel,
+                        //             4_u32,
+                        //         );
+                        //
+                        //         ui.text("max_samples_per_pixel");
+                        //
+                        //         ui.same_line();
+                        //
+                        //         ui.radio_button(
+                        //             "128",
+                        //             &mut render_params.sampling.max_samples_per_pixel,
+                        //             128_u32,
+                        //         );
+                        //
+                        //         ui.same_line();
+                        //
+                        //         ui.radio_button(
+                        //             "256",
+                        //             &mut render_params.sampling.max_samples_per_pixel,
+                        //             256_u32,
+                        //         );
+                        //
+                        //         ui.same_line();
+                        //
+                        //         ui.radio_button(
+                        //             "512",
+                        //             &mut render_params.sampling.max_samples_per_pixel,
+                        //             512_u32,
+                        //         );
+                        //
+                        //         ui.slider(
+                        //             "num_bounces",
+                        //             4,
+                        //             10,
+                        //             &mut render_params.sampling.num_bounces,
+                        //         );
+                        //
+                        //         ui.separator();
+                        //
+                        //         ui.text("Camera parameters");
+                        //
+                        //         ui.slider(
+                        //             "vfov",
+                        //             10.0,
+                        //             90.0,
+                        //             &mut fly_camera_controller.vfov_degrees,
+                        //         );
+                        //
+                        //         ui.slider(
+                        //             "aperture",
+                        //             0.0,
+                        //             1.0,
+                        //             &mut fly_camera_controller.aperture,
+                        //         );
+                        //
+                        //         ui.slider(
+                        //             "focus_distance",
+                        //             5.0,
+                        //             20.0,
+                        //             &mut fly_camera_controller.focus_distance,
+                        //         );
+                        //
+                        //         ui.separator();
+                        //
+                        //         ui.text("Sky parameters");
+                        //
+                        //         ui.slider(
+                        //             "azimuth",
+                        //             0_f32,
+                        //             360_f32,
+                        //             &mut render_params.sky.azimuth_degrees,
+                        //         );
+                        //
+                        //         ui.slider(
+                        //             "inclination",
+                        //             0_f32,
+                        //             90_f32,
+                        //             &mut render_params.sky.zenith_degrees,
+                        //         );
+                        //
+                        //         ui.slider(
+                        //             "turbidity",
+                        //             1_f32,
+                        //             10_f32,
+                        //             &mut render_params.sky.turbidity,
+                        //         );
+                        //
+                        //         ui.color_edit3("albedo", &mut render_params.sky.albedo);
+                        //     });
                     }
 
                     if last_cursor != Some(ui.mouse_cursor()) {
@@ -385,7 +385,7 @@ fn main() {
                         label: None,
                     });
 
-                    raytracer.render_frame(&context.queue, &mut render_pass);
+                    // raytracer.render_frame(&context.queue, &mut render_pass);
 
                     match imgui_renderer.render(
                         imgui.render(),

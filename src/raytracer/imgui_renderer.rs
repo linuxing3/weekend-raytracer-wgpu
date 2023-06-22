@@ -5,6 +5,7 @@ use super::{
 };
 use image::{ImageBuffer, Rgb};
 use nalgebra_glm::{dot, vec3, Vec3};
+use num::abs;
 use std::pin::Pin;
 use std::ptr::null;
 use std::{ops::DerefMut, ptr::null_mut};
@@ -22,7 +23,7 @@ impl ImguiRenderer {
         render_params: &RenderParams,
         camera: *mut GpuCamera,
     ) -> Self {
-        let image = ImguiImage::new(100.0, 100.0);
+        let image = ImguiImage::new(400.0, 400.0);
         Self {
             camera,
             image,
@@ -72,7 +73,8 @@ impl ImguiRenderer {
             for y in 0..height as u32 {
                 for x in 0..width as u32 {
                     let pixel = (*imgbuf).get_pixel_mut(x, y);
-                    *pixel = self.ray_color_per_pixel(x, y, rp);
+                    // *pixel = self.ray_color_per_pixel(x, y, rp);
+                    *pixel = self.per_pixel(x, y, rp);
                 }
             }
             // set to image
@@ -88,16 +90,25 @@ impl ImguiRenderer {
         let width = (*self.image).width();
         let u = coord_to_color(x, width as f32);
         let v = coord_to_color(y, height as f32);
+        let (uu, vv) = (u + random_f32(), v + random_f32());
+        let mut pixel_color = Vec3::zeros();
 
+        let rec = Box::into_raw(Box::new(Intersection::new()));
         unsafe {
-            let first_sphere = (*self.scene).spheres[1];
-            let (uu, vv) = (u + random_f32(), v + random_f32());
+            let first_sphere = (*self.scene).spheres[0];
             let mut ray = (*self.camera).make_ray(uu, vv);
-            let rec = Box::into_raw(Box::new(Intersection::new()));
-            first_sphere.closest_hit_raw(&ray, 0.001, std::f32::MAX, rec);
-            let mut sampled_color = (*rec).n.normalize() * 255.0 / 2.0;
-            return vec3_to_rgb8(sampled_color);
-            // return vec3_to_rgb8(vec3(v * 255.0, u * 255.0, 255.0));
+
+            for i in 0..40 {
+                let light_dir = vec3(5.0, -3.0, 2.0).normalize();
+                let light_dir_rev = (*rec).p - light_dir;
+                let light_intensity = dot(&(*rec).n, &light_dir_rev);
+                if first_sphere.closest_hit_raw(&ray, 0.001, std::f32::MAX, rec) {
+                    let mut sampled_color = (*rec).n.normalize() * 255.0 / 2.0;
+                    pixel_color += sampled_color;
+                }
+                return vec3_to_rgb8(pixel_color);
+            }
+            return vec3_to_rgb8(vec3(v * 255.0, u * 255.0, 255.0));
         }
     }
     /**
@@ -138,7 +149,7 @@ impl ImguiRenderer {
 
             let n_samples = render_params.sampling.num_samples_per_pixel;
 
-            let mut depth: u32 = 20;
+            let mut depth: u32 = 10;
 
             let multipler = 0.5;
 
@@ -165,37 +176,36 @@ impl ImguiRenderer {
                     // scatter + attenuation + reflect
                     let scattered_ray = Box::into_raw(Box::new(Ray::new_from_xy(0.0, 0.0)));
 
-                    let mut texture = TextureDescriptor::empty();
                     let mut fuzzy = 0.0;
                     let mut albedo = Vec3::zeros();
 
-                    // if scatter_metal(&ray, rec, scattered_ray) {
-                    //     texture = (*self.material_data)[2].desc1;
-                    //     fuzzy = (*self.material_data)[2].x;
-                    //     albedo = texture_lookup(
-                    //         texture,
-                    //         &(*self.global_texture_data),
-                    //         (*rec).u,
-                    //         (*rec).v,
-                    //     );
-                    // }
+                    if scatter_metal(&ray, rec, scattered_ray) {
+                        let texture = (*self.material_data)[2].desc1;
+                        fuzzy = (*self.material_data)[2].x;
+                        albedo = texture_lookup(
+                            texture,
+                            &(*self.global_texture_data),
+                            (*rec).u,
+                            (*rec).v,
+                        );
+                    }
                     // let mut metal_material = Metal {
                     //     ray: &ray,
                     //     albedo: vec3(1.0, 0.85, 0.57),
                     // };
 
-                    {
-                        let light_dir = vec3(5.0, -3.0, 2.0).normalize();
-                        let light_dir_rev = (*rec).p - light_dir;
-                        let mut light_theta = dot(&(*rec).n, &light_dir_rev);
-                        if light_theta < 0.0 {
-                            light_theta = 0.0
-                        };
-                        // let light_intensity = std::cmp::max(light_theta, 0_f32);
-                    }
+                    // {
+                    //     let light_dir = vec3(5.0, -3.0, 2.0).normalize();
+                    //     let light_dir_rev = (*rec).p - light_dir;
+                    //     let mut light_theta = dot(&(*rec).n, &light_dir_rev);
+                    //     if light_theta < 0.0 {
+                    //         light_theta = 0.0
+                    //     };
+                    //     // let light_intensity = std::cmp::max(light_theta, 0_f32);
+                    // }
 
                     // if scatter_lambertian(&ray, rec, scattered_ray) {
-                    //     texture = (*self.material_data)[1].desc1;
+                    //     let texture = (*self.material_data)[1].desc1;
                     //     fuzzy = (*self.material_data)[1].x;
                     //     albedo = texture_lookup(
                     //         texture,
@@ -207,9 +217,9 @@ impl ImguiRenderer {
 
                     if self.ray_hit_world_raw(&(*scattered_ray), world, 0.001, f32::MAX, rec) {
                         let mut sampled_color = (*rec).n.normalize() * 255.0 / 2.0;
-                        // sampled_color.x *= (*albedo).x * fuzzy;
-                        // sampled_color.y *= (*albedo).y * fuzzy;
-                        // sampled_color.z *= (*albedo).z * fuzzy;
+                        sampled_color.x *= (*albedo).x * fuzzy;
+                        sampled_color.y *= (*albedo).y * fuzzy;
+                        sampled_color.z *= (*albedo).z * fuzzy;
 
                         pixel_color += multipler * sampled_color;
 
