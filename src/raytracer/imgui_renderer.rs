@@ -3,7 +3,7 @@ use super::{
     math::*, scatter_lambertian, scatter_metal, texture_lookup, GpuCamera, GpuMaterial, ImguiImage,
     Intersection, Metal, Ray, RenderParams, Scene, Sphere, TextureDescriptor,
 };
-use image::{ImageBuffer, Rgb};
+use image::{ImageBuffer, Rgb, Rgba};
 use nalgebra_glm::{dot, vec3, Vec3};
 use num::abs;
 use std::pin::Pin;
@@ -85,7 +85,7 @@ impl ImguiRenderer {
         x: u32,
         y: u32,
         render_params: &RenderParams,
-    ) -> Rgb<u8> {
+    ) -> Rgba<u8> {
         let height = (*self.image).height();
         let width = (*self.image).width();
         let u = coord_to_color(x, width as f32);
@@ -106,9 +106,9 @@ impl ImguiRenderer {
                     let mut sampled_color = (*rec).n.normalize() * 255.0 / 2.0;
                     pixel_color += sampled_color;
                 }
-                return vec3_to_rgb8(pixel_color);
+                return vec3_to_rgba8(pixel_color);
             }
-            return vec3_to_rgb8(vec3(v * 255.0, u * 255.0, 255.0));
+            return vec3_to_rgba8(vec3(v * 255.0, u * 255.0, 255.0));
         }
     }
     /**
@@ -138,7 +138,7 @@ impl ImguiRenderer {
         x: u32,
         y: u32,
         render_params: &RenderParams,
-    ) -> Rgb<u8> {
+    ) -> Rgba<u8> {
         unsafe {
             let height = (*self.image).height();
             let width = (*self.image).width();
@@ -168,7 +168,7 @@ impl ImguiRenderer {
                 // if self.ray_hit_world(&ray, 0.001, f32::MAX, &mut rec) {
                 if self.ray_hit_world_raw(&ray, world, 0.001, f32::MAX, rec) {
                     if depth <= 0 {
-                        return vec3_to_rgb8(vec3(0.0, 0.0, 0.0));
+                        return vec3_to_rgba8(vec3(0.0, 0.0, 0.0));
                     }
 
                     depth -= 1;
@@ -223,12 +223,12 @@ impl ImguiRenderer {
 
                         pixel_color += multipler * sampled_color;
 
-                        return vec3_to_rgb8(pixel_color);
+                        return vec3_to_rgba8(pixel_color);
                     }
                 }
             }
 
-            vec3_to_rgb8(vec3(v * 255.0, u * 255.0, 255.0))
+            vec3_to_rgba8(vec3(v * 255.0, u * 255.0, 255.0))
         }
     }
 

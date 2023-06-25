@@ -1,4 +1,4 @@
-use image::Rgb;
+use image::{Rgb, Rgba};
 use nalgebra_glm::{dot, vec3, Vec3};
 
 pub fn coord_to_color(
@@ -14,6 +14,10 @@ pub fn arry_to_vec3(color: [f32; 3]) -> Vec3 {
 
 pub fn vec3_to_rgb8(v: Vec3) -> Rgb<u8> {
     Rgb([v.x as u8, v.y as u8, v.z as u8])
+}
+
+pub fn vec3_to_rgba8(v: Vec3) -> Rgba<u8> {
+    Rgba([v.x as u8, v.y as u8, v.z as u8, 255 as u8])
 }
 
 pub fn rgb8_to_vec3(color: Rgb<u8>) -> Vec3 {

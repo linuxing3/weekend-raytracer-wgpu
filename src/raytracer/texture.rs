@@ -1,10 +1,13 @@
+#![allow(dead_code)]
+#![allow(unused_imports)]
 use imgui::TextureId;
 
 use thiserror::Error;
 
-use image::{GenericImageView, ImageBuffer, Rgb, RgbaImage};
+use image::{GenericImageView, ImageBuffer, Rgb, Rgba, RgbaImage};
 
 pub type XImageBuffer = ImageBuffer<Rgb<u8>, Vec<u8>>;
+pub type YImageBuffer = ImageBuffer<Rgba<u8>, Vec<u8>>;
 
 pub struct Texture {
     dimensions: (u32, u32),
