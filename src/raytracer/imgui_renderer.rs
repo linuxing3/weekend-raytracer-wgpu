@@ -1,4 +1,6 @@
 #![deny(clippy::pedantic, nonstandard_style)]
+#![allow(dead_code)]
+#![allow(unused_imports)]
 use super::{
     math::*, scatter_lambertian, scatter_metal, texture_lookup, GpuCamera, GpuMaterial, ImguiImage,
     Intersection, Metal, Ray, RenderParams, Scene, Sphere, TextureDescriptor,
@@ -166,7 +168,7 @@ impl ImguiRenderer {
                 let rec = Box::into_raw(Box::new(Intersection::new()));
 
                 // if self.ray_hit_world(&ray, 0.001, f32::MAX, &mut rec) {
-                if self.ray_hit_world_raw(&ray, world, 0.001, f32::MAX, rec) {
+                if self.ray_hit_world_raw(&ray, 0.001, f32::MAX, rec) {
                     if depth <= 0 {
                         return vec3_to_rgba8(vec3(0.0, 0.0, 0.0));
                     }
@@ -215,7 +217,7 @@ impl ImguiRenderer {
                     //     );
                     // }
 
-                    if self.ray_hit_world_raw(&(*scattered_ray), world, 0.001, f32::MAX, rec) {
+                    if self.ray_hit_world_raw(&(*scattered_ray), 0.001, f32::MAX, rec) {
                         let mut sampled_color = (*rec).n.normalize() * 255.0 / 2.0;
                         sampled_color.x *= (*albedo).x * fuzzy;
                         sampled_color.y *= (*albedo).y * fuzzy;
@@ -269,7 +271,6 @@ impl ImguiRenderer {
     pub fn ray_hit_world_raw(
         &mut self,
         ray: &Ray,
-        world: &Vec<Sphere>,
         tmin: f32,
         tmax: f32,
         rec: *mut Intersection,
