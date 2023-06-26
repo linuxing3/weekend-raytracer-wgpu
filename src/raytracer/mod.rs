@@ -1103,6 +1103,7 @@ impl Intersection {
         outward_normal: Vec3,
     ) {
         self.f = glm::dot(&ray.direction, &outward_normal) < 0.0;
+        
 
         match self.f {
             true => {
@@ -1241,7 +1242,8 @@ impl Sphere {
         // normal = P -c
         // https://raytracing.github.io/images/fig-1.05-sphere-normal.jpg
         let n = (1.0 / self.1) * ((*rec).p - self.0.xyz());
-        rec.set_face_normal(ray, n);
+        // rec.set_face_normal(ray, n);
+        rec.n = glm::faceforward(&n, &ray.direction, &n);
 
         // ?
         let theta = acos(&-n.yy()).len() as f32;

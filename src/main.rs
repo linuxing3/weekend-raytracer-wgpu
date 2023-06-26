@@ -111,7 +111,7 @@ fn main() {
     // HACK: imgui layers
 
     let camera = GpuCamera::new(&render_params.camera, viewport_size);
-    let mut layer = RayLayer::new(&render_params, camera);
+    let mut layer = RayLayer::new(&render_params, camera, 0.0);
     layer.on_attach(
         &render_params,
         &context.device,
@@ -177,6 +177,8 @@ fn main() {
 
                     imgui.io_mut().update_delta_time(now - last_time);
 
+                    // layer.on_update(now - last_time);
+
                     last_time = now;
                 }
 
@@ -186,9 +188,7 @@ fn main() {
                     Err(e) => {
                         eprintln!("Error setting render params: {e}")
                     }
-                    _ => {
-                        // layer.update_camera(&render_params);
-                    }
+                    _ => {}
                 }
 
                 {

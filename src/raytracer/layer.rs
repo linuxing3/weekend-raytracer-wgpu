@@ -25,9 +25,7 @@ pub trait Layer {
     );
     fn on_update(
         &mut self,
-        ui: &mut Ui,
-        rp: &RenderParams,
-        size: [f32; 2],
+        dt: f32
     );
     fn on_render(
         &mut self,
@@ -59,7 +57,6 @@ impl Layer for RayLayer {
         renderer: &mut imgui_wgpu::Renderer,
     ) {
         unsafe {
-            println!("Attached imgui layer");
             let image: Pin<&mut ImguiImage> = Pin::as_mut(&mut self.renderer.image);
             Pin::get_unchecked_mut(image).allocate_memory(device, queue, renderer);
         }
@@ -74,9 +71,7 @@ impl Layer for RayLayer {
 
     fn on_update(
         &mut self,
-        ui: &mut Ui,
-        rp: &RenderParams,
-        size: [f32; 2],
+        dt: f32,
     ) {
         // self.camera.update;
     }
@@ -102,6 +97,7 @@ impl RayLayer {
     pub fn new(
         render_params: &RenderParams,
         camera: GpuCamera,
+        dt:f32,
     ) -> Self {
         let scene = scene();
 
@@ -118,7 +114,7 @@ impl RayLayer {
             scene,
             width: 0.0,
             height: 0.0,
-            last_rendered_time: 0.0,
+            last_rendered_time:dt, 
             material_data,
             global_texture_data,
         }

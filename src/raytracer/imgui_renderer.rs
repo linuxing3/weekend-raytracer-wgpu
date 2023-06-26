@@ -75,12 +75,26 @@ impl ImguiRenderer {
             for y in 0..height as u32 {
                 for x in 0..width as u32 {
                     let pixel = (*imgbuf).get_pixel_mut(x, y);
-                    // *pixel = self.ray_color_per_pixel(x, y, rp);
                     *pixel = self.per_pixel(x, y, rp);
                 }
             }
             // set to image
         }
+    }
+
+    pub fn per_pixel_lerp(
+        &mut self,
+        x: u32,
+        y: u32,
+    ) -> Rgba<u8> {
+        let height = (*self.image).height();
+        let width = (*self.image).width();
+        let u = coord_to_color(x, width as f32);
+        let v = coord_to_color(y, height as f32);
+        let mut pixel_color = vec3(u * 255.0, v * 255.0, 25.0);
+        let mut final_color = vec3(255.0, 255.0, 255.0);
+        let color = glm::lerp(&pixel_color, &final_color, 0.1);
+        vec3_to_rgba8(color)
     }
     pub fn per_pixel(
         &mut self,
@@ -107,10 +121,11 @@ impl ImguiRenderer {
                 if first_sphere.closest_hit_raw(&ray, 0.001, std::f32::MAX, rec) {
                     let mut sampled_color = (*rec).n.normalize() * 255.0 / 2.0;
                     pixel_color += sampled_color;
+                    return vec3_to_rgba8(pixel_color);
                 }
-                return vec3_to_rgba8(pixel_color);
+                return self.per_pixel_lerp(x, y);
             }
-            return vec3_to_rgba8(vec3(v * 255.0, u * 255.0, 255.0));
+            return self.per_pixel_lerp(x, y);
         }
     }
     /**
