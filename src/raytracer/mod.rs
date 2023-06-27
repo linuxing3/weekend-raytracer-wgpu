@@ -2,7 +2,8 @@ pub use color::Color;
 use gpu_buffer::{StorageBuffer, UniformBuffer};
 use image::Rgb;
 pub use math::*;
-use nalgebra_glm::{acos, atan2, dot, vec3, Vec3};
+use nalgebra_glm::{acos, atan2, dot, reflect_vec, refract_vec, vec3, Vec3};
+use num::Float;
 use wgpu::util::DeviceExt;
 pub use {
     angle::Angle, imgui_image::ImguiImage, imgui_renderer::ImguiRenderer, layer::Layer,
@@ -20,7 +21,7 @@ mod layer;
 mod math;
 mod texture;
 
-use std::f32::consts::*;
+use std::{f32::consts::*};
 
 pub struct Raytracer {
     vertex_uniform_bind_group: wgpu::BindGroup,
@@ -1103,7 +1104,6 @@ impl Intersection {
         outward_normal: Vec3,
     ) {
         self.f = glm::dot(&ray.direction, &outward_normal) < 0.0;
-        
 
         match self.f {
             true => {
@@ -1235,15 +1235,14 @@ impl Sphere {
             return false;
         }
 
-        (*rec).m = self.2;
-        // p = ray.at(t)
+        (*rec).m = self.2; // material index
+                           // p = ray.at(t)
         (*rec).p = ray.origin + ray.direction * t;
 
-        // normal = P -c
         // https://raytracing.github.io/images/fig-1.05-sphere-normal.jpg
         let n = (1.0 / self.1) * ((*rec).p - self.0.xyz());
-        // rec.set_face_normal(ray, n);
-        rec.n = glm::faceforward(&n, &ray.direction, &n);
+        rec.set_face_normal(ray, n);
+        // rec.n = glm::faceforward(&n, &ray.direction, &n);
 
         // ?
         let theta = acos(&-n.yy()).len() as f32;
@@ -1255,16 +1254,6 @@ impl Sphere {
     }
 
     // add code here
-}
-
-pub struct Lambertian<'a> {
-    ray: &'a Ray,
-    albedo: Vec3,
-}
-
-pub struct Metal<'a> {
-    ray: &'a Ray,
-    albedo: Vec3,
 }
 
 pub trait Scatterable {
@@ -1301,6 +1290,7 @@ fn scatter_lambertian(
         true
     }
 }
+
 fn scatter_metal(
     ray: &Ray,
     rec: *mut Intersection,
@@ -1310,7 +1300,7 @@ fn scatter_metal(
         return false;
     }
     unsafe {
-        let reflected = reflect(unit_vertor(ray.direction), (*rec).n.normalize());
+        let reflected = reflect_vec(&unit_vertor(ray.direction), &(*rec).n.normalize());
 
         let temp_ray = Ray::new((*rec).p, reflected);
 
@@ -1326,22 +1316,45 @@ fn scatter_metal(
     }
 }
 
-pub fn default_background(ray: &Ray) -> Rgb<u8> {
-    let unit_direction = ray.direction.normalize();
+fn scatter_dielectric(
+    ray: &Ray,
+    rec: *mut Intersection,
+    refract_index: f32,
+    ray_scattered: *mut Ray,
+) -> bool {
+    if ray_scattered == std::ptr::null_mut() {
+        return false;
+    }
+    unsafe {
+        let refraction_ratio = match (*rec).f {
+            true => 1.0 / refract_index,
+            false => refract_index,
+        };
+        //
+        let cos_theta = 1.0.min(dot(&-unit_vertor(ray.direction), &(*rec).n.normalize()));
+        let sin_theta = num::Float::sqrt(1.0 - cos_theta * cos_theta);
+        let cannot_refract = refraction_ratio * sin_theta > 1.0;
 
-    let t = 0.5 * (unit_direction.y + 1.0);
+        let mut refracted = Vec3::zeros();
 
-    let start_color_v3 = glm::vec3(0.6, 0.6, 0.75);
+        match cannot_refract {
+            true => {
+                refracted = refract_vec(
+                    &unit_vertor(ray.direction),
+                    &(*rec).n.normalize(),
+                    0.0,
+                );
+            }
+            false => {
+                refracted = refract_vec(
+                    &unit_vertor(ray.direction),
+                    &(*rec).n.normalize(),
+                    refraction_ratio,
+                );
+            }
+        }
 
-    let end_color_v3 = glm::vec3(0.08, 0.05, 0.02);
-
-    let background_color_v3 = (1.0 - t) * start_color_v3 + t * end_color_v3;
-
-    let background_color = vec3_to_rgb8(255.0 * background_color_v3);
-
-    background_color
-}
-
-pub fn gradient_background(ray: &Ray) -> Rgb<u8> {
-    Rgb([ray.direction.y as u8, ray.direction.x as u8, 50])
+        *ray_scattered = Ray::new((*rec).p, refracted);
+        return true;
+    }
 }

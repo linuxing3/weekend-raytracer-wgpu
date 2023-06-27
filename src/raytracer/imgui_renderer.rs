@@ -2,8 +2,8 @@
 #![allow(dead_code)]
 #![allow(unused_imports)]
 use super::{
-    math::*, scatter_lambertian, scatter_metal, texture_lookup, GpuCamera, GpuMaterial, ImguiImage,
-    Intersection, Metal, Ray, RenderParams, Scene, Sphere, TextureDescriptor,
+    math::*, scatter_dielectric, scatter_lambertian, scatter_metal, texture_lookup, GpuCamera,
+    GpuMaterial, ImguiImage, Intersection, Ray, RenderParams, Scene, Sphere, TextureDescriptor,
 };
 use image::{ImageBuffer, Rgb, Rgba};
 use nalgebra_glm::{dot, vec3, Vec3};
@@ -75,7 +75,7 @@ impl ImguiRenderer {
             for y in 0..height as u32 {
                 for x in 0..width as u32 {
                     let pixel = (*imgbuf).get_pixel_mut(x, y);
-                    *pixel = self.per_pixel(x, y, rp);
+                    *pixel = self.ray_color_per_pixel(x, y, rp);
                 }
             }
             // set to image
@@ -91,11 +91,12 @@ impl ImguiRenderer {
         let width = (*self.image).width();
         let u = coord_to_color(x, width as f32);
         let v = coord_to_color(y, height as f32);
-        let mut pixel_color = vec3(u * 255.0, v * 255.0, 25.0);
+        let mut start_color = vec3(u * 255.0, v * 255.0, 25.0);
         let mut final_color = vec3(255.0, 255.0, 255.0);
-        let color = glm::lerp(&pixel_color, &final_color, 0.1);
+        let color = glm::lerp(&start_color, &final_color, 0.1);
         vec3_to_rgba8(color)
     }
+
     pub fn per_pixel(
         &mut self,
         x: u32,
@@ -104,52 +105,59 @@ impl ImguiRenderer {
     ) -> Rgba<u8> {
         let height = (*self.image).height();
         let width = (*self.image).width();
+        // coordinate offset
         let u = coord_to_color(x, width as f32);
         let v = coord_to_color(y, height as f32);
+        // random to get noise
         let (uu, vv) = (u + random_f32(), v + random_f32());
+        // initialize pixel color with blank color
         let mut pixel_color = Vec3::zeros();
 
+        // create hit info
         let rec = Box::into_raw(Box::new(Intersection::new()));
         unsafe {
+            // choose first sphere from scene
             let first_sphere = (*self.scene).spheres[0];
+            // make ray from camera
             let mut ray = (*self.camera).make_ray(uu, vv);
-
+            // multisampling
             for i in 0..40 {
-                let light_dir = vec3(5.0, -3.0, 2.0).normalize();
-                let light_dir_rev = (*rec).p - light_dir;
-                let light_intensity = dot(&(*rec).n, &light_dir_rev);
+                // check hit
                 if first_sphere.closest_hit_raw(&ray, 0.001, std::f32::MAX, rec) {
+                    // use hit record normal vector as color
                     let mut sampled_color = (*rec).n.normalize() * 255.0 / 2.0;
+                    // accumulat color per sample
                     pixel_color += sampled_color;
                     return vec3_to_rgba8(pixel_color);
                 }
+                // return default background
                 return self.per_pixel_lerp(x, y);
             }
+            // return default background
             return self.per_pixel_lerp(x, y);
         }
     }
-    /**
-     *
-     * Calculate the color of ray tracing, considering the followings:
-     * 1. multitimes bouncing
-     * 2. send ray from eye
-     * 3. hit the sphere at, got intersection (point vector, normal vector,
-     * etc.)
-     * 4. recursively send ray for sampling times with material
-     * color/texture, from p to unit sphere with normal vector lenght as
-     * radius
-     * 5. convert normal plus other physical factors
-     * (attenuation, fuzzy refection) to get final color
-     *
-     * @params
-     *
-     * @ray:   the entre ray
-     * @world: a impl Hittable, which can be hit by ray
-     * @material: materials including metal, dielectric, lambertian, etc
-     * @fuzzy:    fuzzy reflection factor
-     * @depth: limit ray bouncing times
-     */
 
+    //
+    //  Calculate the color of ray tracing, considering the followings:
+    //  1. multitimes bouncing
+    //  2. send ray from eye
+    //  3. hit the sphere at, got intersection (point vector, normal vector,
+    //  etc.)
+    //  4. recursively send ray for sampling times with material
+    //  color/texture, from p to unit sphere with normal vector lenght as
+    //  radius
+    //  5. convert normal plus other physical factors
+    //  (attenuation, fuzzy refection) to get final color
+    //
+    //  @params
+    //
+    //  @ray:   the entre ray
+    //  @world: a impl Hittable, which can be hit by ray
+    //  @material: materials including metal, dielectric, lambertian, etc
+    //  @fuzzy:    fuzzy reflection factor
+    //  @depth: limit ray bouncing times
+    //
     pub fn ray_color_per_pixel(
         &mut self,
         x: u32,
@@ -172,8 +180,7 @@ impl ImguiRenderer {
 
             let mut pixel_color = Vec3::zeros();
 
-            let world = &(*self.scene).spheres;
-            // sampleing
+            // sampling
             for _s in 0..n_samples {
                 let (uu, vv) = (u + random_f32(), v + random_f32());
 
@@ -182,7 +189,6 @@ impl ImguiRenderer {
                 // NOTE: hit info record
                 let rec = Box::into_raw(Box::new(Intersection::new()));
 
-                // if self.ray_hit_world(&ray, 0.001, f32::MAX, &mut rec) {
                 if self.ray_hit_world_raw(&ray, 0.001, f32::MAX, rec) {
                     if depth <= 0 {
                         return vec3_to_rgba8(vec3(0.0, 0.0, 0.0));
@@ -190,48 +196,60 @@ impl ImguiRenderer {
 
                     depth -= 1;
 
+                    let object_index = (*rec).m;
+
                     // scatter + attenuation + reflect
                     let scattered_ray = Box::into_raw(Box::new(Ray::new_from_xy(0.0, 0.0)));
 
                     let mut fuzzy = 0.0;
                     let mut albedo = Vec3::zeros();
 
-                    if scatter_metal(&ray, rec, scattered_ray) {
-                        let texture = (*self.material_data)[2].desc1;
-                        fuzzy = (*self.material_data)[2].x;
-                        albedo = texture_lookup(
-                            texture,
-                            &(*self.global_texture_data),
-                            (*rec).u,
-                            (*rec).v,
-                        );
-                    }
-                    // let mut metal_material = Metal {
-                    //     ray: &ray,
-                    //     albedo: vec3(1.0, 0.85, 0.57),
-                    // };
+                    let refraction_index = 1.5_f32;
 
-                    // {
-                    //     let light_dir = vec3(5.0, -3.0, 2.0).normalize();
-                    //     let light_dir_rev = (*rec).p - light_dir;
-                    //     let mut light_theta = dot(&(*rec).n, &light_dir_rev);
-                    //     if light_theta < 0.0 {
-                    //         light_theta = 0.0
-                    //     };
-                    //     // let light_intensity = std::cmp::max(light_theta, 0_f32);
-                    // }
+                    match object_index {
+                        1 => {
+                            if scatter_lambertian(&ray, rec, scattered_ray) {
+                                let texture = (*self.material_data)[1].desc1;
+                                fuzzy = (*self.material_data)[1].x;
+                                albedo = texture_lookup(
+                                    texture,
+                                    &(*self.global_texture_data),
+                                    (*rec).u,
+                                    (*rec).v,
+                                );
+                            }
+                        }
+                        2 => {
+                            if scatter_metal(&ray, rec, scattered_ray) {
+                                let texture = (*self.material_data)[2].desc1;
+                                fuzzy = (*self.material_data)[2].x;
+                                albedo = texture_lookup(
+                                    texture,
+                                    &(*self.global_texture_data),
+                                    (*rec).u,
+                                    (*rec).v,
+                                );
+                            }
+                        }
+                        3 => {
+                            scatter_dielectric(&ray, rec, refraction_index, scattered_ray);
+                            
+                        }
+                        _ => {
+                            if scatter_metal(&ray, rec, scattered_ray) {
+                                let texture = (*self.material_data)[2].desc1;
+                                fuzzy = (*self.material_data)[2].x;
+                                albedo = texture_lookup(
+                                    texture,
+                                    &(*self.global_texture_data),
+                                    (*rec).u,
+                                    (*rec).v,
+                                );
+                            }
+                        }
+                    };
 
-                    // if scatter_lambertian(&ray, rec, scattered_ray) {
-                    //     let texture = (*self.material_data)[1].desc1;
-                    //     fuzzy = (*self.material_data)[1].x;
-                    //     albedo = texture_lookup(
-                    //         texture,
-                    //         &(*self.global_texture_data),
-                    //         (*rec).u,
-                    //         (*rec).v,
-                    //     );
-                    // }
-
+                    // using scattered ray to trace more
                     if self.ray_hit_world_raw(&(*scattered_ray), 0.001, f32::MAX, rec) {
                         let mut sampled_color = (*rec).n.normalize() * 255.0 / 2.0;
                         sampled_color.x *= (*albedo).x * fuzzy;

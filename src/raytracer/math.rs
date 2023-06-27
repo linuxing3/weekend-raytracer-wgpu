@@ -1,5 +1,6 @@
 use image::{Rgb, Rgba};
 use nalgebra_glm::{dot, vec3, Vec3};
+use num::integer::sqrt;
 
 pub fn coord_to_color(
     u_or_v: u32,

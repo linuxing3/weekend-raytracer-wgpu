@@ -25,7 +25,7 @@ pub trait Layer {
     );
     fn on_update(
         &mut self,
-        dt: f32
+        dt: f32,
     );
     fn on_render(
         &mut self,
@@ -97,7 +97,7 @@ impl RayLayer {
     pub fn new(
         render_params: &RenderParams,
         camera: GpuCamera,
-        dt:f32,
+        dt: f32,
     ) -> Self {
         let scene = scene();
 
@@ -114,7 +114,7 @@ impl RayLayer {
             scene,
             width: 0.0,
             height: 0.0,
-            last_rendered_time:dt, 
+            last_rendered_time: dt,
             material_data,
             global_texture_data,
         }
@@ -247,13 +247,11 @@ pub fn scene() -> Scene {
     ];
 
     let spheres = vec![
-        Sphere::new(glm::vec3(5.0, -2.5, 2.5), 2.5, 2_u32),
-        // Sphere::new(glm::vec3(5.0, -2.5, 2.5), 2.5, 4_u32),
-        // Sphere::new(glm::vec3(0.0, 3.5, 1.0), 3.6, 0_u32),
-        // Sphere::new(glm::vec3(0.0, 1.0, 0.0), 1.0, 3_u32),
-        // Sphere::new(glm::vec3(-5.0, 1.0, 0.0), 1.0, 2_u32),
-        // Sphere::new(glm::vec3(2.0, -1.0, 0.0), 2.0, 3_u32),
-        // Sphere::new(glm::vec3(5.0, 0.8, 1.5), 0.8, 1_u32),
+        Sphere::new(glm::vec3(0.0, -500.0, -1.0), 500.0, 0_u32),
+        Sphere::new(glm::vec3(0.0, 1.0, 0.0), 1.0, 3_u32),
+        Sphere::new(glm::vec3(-5.0, 1.0, 0.0), 1.0, 2_u32),
+        Sphere::new(glm::vec3(5.0, 0.8, 1.5), 0.8, 1_u32),
+        Sphere::new(glm::vec3(5.0, 1.2, -1.5), 1.2, 4_u32),
     ];
 
     Scene { spheres, materials }
