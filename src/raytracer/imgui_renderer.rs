@@ -75,7 +75,7 @@ impl ImguiRenderer {
             for y in 0..height as u32 {
                 for x in 0..width as u32 {
                     let pixel = (*imgbuf).get_pixel_mut(x, y);
-                    *pixel = self.ray_color_per_pixel(x, y, rp);
+                    *pixel = self.per_pixel(x, y, rp);
                 }
             }
             // set to image
@@ -203,11 +203,10 @@ impl ImguiRenderer {
 
                     let mut fuzzy = 0.0;
                     let mut albedo = Vec3::zeros();
-
                     let refraction_index = 1.5_f32;
 
                     match object_index {
-                        1 => {
+                        1 | 4 => {
                             if scatter_lambertian(&ray, rec, scattered_ray) {
                                 let texture = (*self.material_data)[1].desc1;
                                 fuzzy = (*self.material_data)[1].x;
@@ -233,7 +232,6 @@ impl ImguiRenderer {
                         }
                         3 => {
                             scatter_dielectric(&ray, rec, refraction_index, scattered_ray);
-                            
                         }
                         _ => {
                             if scatter_metal(&ray, rec, scattered_ray) {

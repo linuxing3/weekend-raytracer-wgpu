@@ -247,10 +247,10 @@ pub fn scene() -> Scene {
     ];
 
     let spheres = vec![
-        Sphere::new(glm::vec3(0.0, -500.0, -1.0), 500.0, 0_u32),
-        Sphere::new(glm::vec3(0.0, 1.0, 0.0), 1.0, 3_u32),
-        Sphere::new(glm::vec3(-5.0, 1.0, 0.0), 1.0, 2_u32),
-        Sphere::new(glm::vec3(5.0, 0.8, 1.5), 0.8, 1_u32),
+        // Sphere::new(glm::vec3(0.0, -500.0, -1.0), 500.0, 0_u32),
+        // Sphere::new(glm::vec3(0.0, 1.0, 0.0), 1.0, 3_u32),
+        // Sphere::new(glm::vec3(-5.0, 1.0, 0.0), 1.0, 2_u32),
+        // Sphere::new(glm::vec3(5.0, 0.8, 1.5), 0.8, 1_u32),
         Sphere::new(glm::vec3(5.0, 1.2, -1.5), 1.2, 4_u32),
     ];
 
